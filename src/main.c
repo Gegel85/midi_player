@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <SFML/Graphics.h>
+#include <SFML/Audio.h>
 #include "midi_parser.h"
 
 #define NOTE_STEP (float)1280 / 74
@@ -295,18 +296,24 @@ void	displayNotes(EventList **allevents, int *allticks, char playingNotes[16][12
 	if(debug)printf("\n\n");
 }
 
-void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos)
+void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[16][128])
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += TICKS;
 	for (int i = 0; i < nbOfTracks; i++)
 		while (events[i] && events[i]->data->timeToAppear < tmp[i]) {
 			tmp[i] -= events[i]->data->timeToAppear;
-			if (events[i]->data->type == MidiNotePressed)
+			if (events[i]->data->type == MidiNotePressed) {
 				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity;
-			else if (events[i]->data->type == MidiNoteReleased)
+				if (sounds[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch]) {
+					sfSound_setVolume(sounds[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch], (float)((MidiNote *)events[i]->data->infos)->velocity * 100 / 127);
+					sfSound_play(sounds[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch]);
+				}
+			} else if (events[i]->data->type == MidiNoteReleased) {
 				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = 0;
-			else if (events[i]->data->type == MidiTempoChanged)
+				if (sounds[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch])
+					sfSound_stop(sounds[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch]);
+			}else if (events[i]->data->type == MidiTempoChanged)
 				infos->tempo = *(int *)events[i]->data->infos;
 			events[i] = events[i]->next;
 		}
@@ -322,7 +329,34 @@ bool	noEventsLeft(EventList **events, int nbOfTracks)
 	return (true);
 }
 
-void	displayMidi(MidiParser *result, char *path, bool debug)
+void	loadSounds(char *path, sfSound *sounds[16][128], sfSoundBuffer *soundBuffers[16][128])
+{
+	char	buffer[1024];
+	char	*note;
+
+	for (int j = 0; j < 128; j++) {
+		note = getNoteString(j);
+		note[0] += 'a' - 'A';
+		sprintf(buffer, "%ssounds/Grand Piano4/%smmell.wav", path, note);
+		soundBuffers[0][j] = sfSoundBuffer_createFromFile(buffer);
+		if (soundBuffers[0][j]) {
+			sounds[0][j] = sfSound_create();
+			if (sounds[0][j])
+				sfSound_setBuffer(sounds[0][j], soundBuffers[0][j]);
+		} else
+			sounds[0][j] = NULL;
+	}
+	for (int i = 1; i < 16; i++)
+		for (int j = 0; j < 128; j++) {
+			soundBuffers[i][j] = soundBuffers[0][j] ? sfSoundBuffer_copy(soundBuffers[0][j]) : NULL;
+			if (soundBuffers[i][j]) {
+				sounds[i][j] = sfSound_create();
+				sfSound_setBuffer(sounds[i][j], soundBuffers[i][j]);
+			}
+		}
+}
+
+void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 {
 	EventList	*events[result->nbOfTracks];
 	sfVideoMode	mode = {1280, 960, 32};
@@ -331,14 +365,23 @@ void	displayMidi(MidiParser *result, char *path, bool debug)
 	sfRenderWindow	*window = sfRenderWindow_create(mode, path, sfClose, NULL);
 	char		playingNotes[16][128];
 	unsigned int	elapsedTicks = 0;
-	char		buffer[100];
+	char		buffer[1000];
 	sfText		*text = sfText_create();
-	sfFont		*font = sfFont_createFromFile("arial.ttf");
+	sfFont		*font;
 	int		tmp[result->nbOfTracks];
 	MidiInfos	infos;
 	bool		go = !debug;
+	sfSound		*sounds[16][128];
+	sfSoundBuffer	*soundBuffers[16][128];
 	bool		pressed = false;
 	
+	for (int i = strlen(progPath) - 1; i > 0; i--)
+		if (progPath[i] == '/' || progPath[i] == '\\') {
+			progPath[i + 1] = 0;
+			break;
+		}
+	sprintf(buffer, "%sarial.ttf", progPath);
+	font = sfFont_createFromFile(buffer);
 	if (!window || !text)
 		return;
 	for (int i = 0; i < 16; i++)
@@ -347,12 +390,24 @@ void	displayMidi(MidiParser *result, char *path, bool debug)
 	memset(&infos, 0, sizeof(infos));
 	for (int i = 0; i < result->nbOfTracks; i++)
 		events[i] = &result->tracks[i].events;
-	sfText_setCharacterSize(text, 10);
+	for (int i = 0; i < 16; i++)
+		for (int j = 0; j < 128; j++) {
+			sounds[i][j] = NULL;
+			soundBuffers[i][j] = NULL;
+		}
+	sfText_setCharacterSize(text, 20);
 	sfRectangleShape_setOutlineColor(rect, (sfColor){0, 0, 0, 255});
 	sfRectangleShape_setOutlineThickness(rect, 2);
 	sfText_setFont(text, font);
 	sfText_setColor(text, (sfColor){255, 255, 255, 255});
 	sfRenderWindow_setFramerateLimit(window, 60);
+	sfText_setPosition(text, (sfVector2f){500, 450});
+	sfText_setString(text, "Loading Ressources");
+	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
+	sfRenderWindow_drawText(window, text, NULL);
+	sfRenderWindow_display(window);
+	sfText_setCharacterSize(text, 10);
+	loadSounds(progPath, sounds, soundBuffers);
 	sfText_setPosition(text, (sfVector2f){0, 0});
 	while (sfRenderWindow_isOpen(window)) {
 		pressed = false;
@@ -365,7 +420,7 @@ void	displayMidi(MidiParser *result, char *path, bool debug)
 				else if (!go && event.key.code == sfKeyRight) {
 					elapsedTicks += TICKS;
 					pressed = true;
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos);
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds);
 				} else if (event.key.code == sfKeyLeft) {
 					elapsedTicks -= TICKS;
 					for (int i = 0; i < 16; i++)
@@ -375,13 +430,13 @@ void	displayMidi(MidiParser *result, char *path, bool debug)
 						tmp[i] = elapsedTicks - TICKS;
 						events[i] = &result->tracks[i].events;
 					}
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos);
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds);
 				}
 			}
 		}
 		if (go) {
 			elapsedTicks += TICKS;
-			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos);
+			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds);
 		}
 		sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 		displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, pressed);
@@ -415,7 +470,7 @@ int	main(int argc, char **args)
 			printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
 		} else
 			printf("division: %i ticks / 1/4 note\n", result->ticks);
-		displayMidi(result, args[1], argc >= 4 && strcmp(args[3], "debug") == 0);
+		displayMidi(result, args[1], args[0], argc >= 4 && strcmp(args[3], "debug") == 0);
 		deleteMidiParserStruct(result);
 	}
 	return (EXIT_SUCCESS);
