@@ -7,25 +7,6 @@
 #define NOTE_STEP (float)1280 / 74
 #define	TICKS 32
 
-typedef struct	Note {
-	unsigned	char	pitch;
-	unsigned	char	channel;
-	unsigned	char	velocity;
-	unsigned long	int	timeBeforeAppear;
-	unsigned long	int	duration;
-} Note;
-
-typedef struct	NoteArray {
-	int	length;
-	Note	*notes;
-} NoteArray;
-
-typedef struct	NoteList {
-	Note			*note;
-	struct	NoteList	*next;
-	struct	NoteList	*prev;
-} NoteList;
-
 const sfColor	channelColors[16] = {
 	{255, 0  , 0  , 255},
 	{0  , 0  , 255, 255},
@@ -45,100 +26,10 @@ const sfColor	channelColors[16] = {
 	{200, 200, 200, 255},
 };
 
-Note	*createNote(unsigned char pitch, unsigned char channel, unsigned long timeBeforeAppear, unsigned long duration, int velocity)
-{
-	Note	*note = malloc(sizeof(*note));
+typedef struct {
+	int	tempo;
 	
-	if (note) {
-		note->pitch = pitch;
-		note->channel = channel;
-		note->timeBeforeAppear = timeBeforeAppear;
-		note->duration = duration;
-		note->velocity = velocity;
-	}
-	return (note);
-}
-
-bool	addNote(NoteList *list, Note *data)
-{
-	if (!data)
-		return (false);
-	for (; list->next && list->next->note->timeBeforeAppear < data->timeBeforeAppear; list = list->next);
-	if (list->note) {
-		if (!list->next) {
-			list->next = malloc(sizeof(*list->next));
-			if (!list->next) {
-				printf("Error: Cannot alloc %iB\n", (int)sizeof(*list->next));
-				return (false);
-			}
-			list->next->prev = list;
-			list->next->next = NULL;
-		} else {
-			list->next->prev = malloc(sizeof(*list->next->prev));
-			if (!list->next) {
-				printf("Error: Cannot alloc %iB\n", (int)sizeof(*list->next));
-				return (false);
-			}
-			list->next->prev->next = list->next;
-			list->next->prev->prev = list;
-			list->next = list->next->prev;
-		}
-		list = list->next;
-	}
-	list->note = data;
-	return (true);
-}
-
-void	deleteNoteList(NoteList *list, bool delData)
-{
-	for (; list->next; list = list->next);
-	for (; list; list = list->prev) {
-		if (delData)
-			free(list->note);
-		free(list->next);
-	}
-}
-
-NoteList	eventsToNote(MidiParser *result)
-{
-	NoteList	nlist = {NULL, NULL, NULL};
-	NoteList	*currlist = &nlist;
-	Note		*notes[16][127];
-	unsigned long	currentTime = 0;
-	MidiNote	*buffer;
-	
-	for (int i = 0; i < 16; i++)
-		memset(notes[i], 0, sizeof(notes[i]));
-	for (int i = 0; i < result->nbOfTracks; i++) {
-		currentTime = 0;
-		currlist = &nlist;
-		for (EventList *list = &result->tracks[i].events; list; list = list->next) {
-			for (; currlist->next && currlist->next->note->timeBeforeAppear < currentTime; currlist = currlist->next);
-			if (list->data->type == MidiNoteReleased) {
-				buffer = list->data->infos;
-				if (notes[buffer->channel][buffer->pitch])
-					notes[buffer->channel][buffer->pitch]->duration = currentTime - notes[buffer->channel][buffer->pitch]->timeBeforeAppear;
-				notes[buffer->channel][buffer->pitch] = NULL;
-			} else if (list->data->type == MidiNotePressed) {
-				buffer = list->data->infos;
-				if (notes[buffer->channel][buffer->pitch])
-					notes[buffer->channel][buffer->pitch]->duration = currentTime - notes[buffer->channel][buffer->pitch]->timeBeforeAppear;
-				if (buffer->velocity) {
-					notes[buffer->channel][buffer->pitch] = createNote(buffer->pitch, buffer->channel, currentTime, 0, buffer->velocity);
-					if (!addNote(currlist, notes[buffer->channel][buffer->pitch]))
-						return ((NoteList){NULL, NULL, NULL});
-				} else
-					notes[buffer->channel][buffer->pitch] = NULL;
-			}
-			currentTime += list->data->timeToAppear;
-		}
-	}
-	for (int i = 0; i < 16; i++)
-		for (int j = 0; j < 27; j++)
-			if (notes[i][j])
-				notes[i][j]->duration = currentTime - notes[i][j]->timeBeforeAppear;
-	return (nlist);
-}
+} MidiInfos;
 
 float	getPosForNote(unsigned char pitch)
 {
@@ -171,7 +62,7 @@ float	getPosForNote(unsigned char pitch)
 	return (pitch / 12 * NOTE_STEP * 7);
 }
 
-void	displayPianoKeys(char playingNotes[16][127], sfRectangleShape *rec, sfRenderWindow *win)
+void	displayPianoKeys(char playingNotes[16][128], sfRectangleShape *rec, sfRenderWindow *win)
 {
 	bool	drawOneBefore = false;
 	float	last = 0;
@@ -236,8 +127,55 @@ void	displayPianoKeys(char playingNotes[16][127], sfRectangleShape *rec, sfRende
 	}
 }
 
-void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int currentTime, int ticks, sfRectangleShape *rec, sfRenderWindow *win)
+char	*getMidiEventTypeString(EventType type)
 {
+	switch (type) {
+	case MidiSequenceNumber:
+		return ("MidiSequenceNumber");
+	case MidiTextEvent:
+		return ("MidiTextEvent");
+	case MidiNewLyric:
+		return ("MidiNewLyric");
+	case MidiNewMarker:
+		return ("MidiNewMarker");
+	case MidiNewCuePoint:
+		return ("MidiNewCuePoint");
+	case MidiNewChannelPrefix:
+		return ("MidiNewChannelPrefix");
+	case MidiPortChange:
+		return ("MidiPortChange");
+	case MidiTempoChanged:
+		return ("MidiTempoChanged");
+	case MidiSMTPEOffset:
+		return ("MidiSMTPEOffset");
+	case MidiNewTimeSignature:
+		return ("MidiNewTimeSignature");
+	case MidiNewKeySignature:
+		return ("MidiNewKeySignature");
+	case MidiSequencerSpecificEvent:
+		return ("MidiSequencerSpecificEvent");
+	case MidiNoteReleased:
+		return ("MidiNoteReleased");
+	case MidiNotePressed:
+		return ("MidiNotePressed");
+	case MidiPolyphonicPressure:
+		return ("MidiPolyphonicPressure");
+	case MidiControllerValueChanged:
+		return ("MidiControllerValueChanged");
+	case MidiProgramChanged:
+		return ("MidiProgramChanged");
+	case MidiPressureOfChannelChanged:
+		return ("MidiPressureOfChannelChanged");
+	case MidiPitchBendChanged:
+		return ("MidiPitchBendChanged");
+	}
+	return ("Unknown event");
+}
+
+void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug)
+{
+	if (debug)
+		printf("Displaying %s from channel %i (startTime: %i, currentTime: %i)\n", getNoteString(pitch), channel, startTime, currentTime);
 	switch (pitch % 12) {
 	case 0:
 	case 2:
@@ -246,10 +184,12 @@ void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int 
 	case 7:
 	case 9:
 	case 11:
+		if (debug)
+			printf("Size (%f, %f)\nPosition (%f, %f)\n", ((float)1280 / 74 - 2), (float)(currentTime - startTime), (float)getPosForNote(pitch), (float)(880 - startTime));
 		sfRectangleShape_setFillColor(rec, channelColors[channel]);
 		sfRectangleShape_setSize(rec, (sfVector2f){(float)1280 / 74 - 2, currentTime - startTime});
 		sfRectangleShape_setOrigin(rec, (sfVector2f){0, currentTime - startTime});
-		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 880 + ticks - startTime});
+		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 880 - startTime});
 		sfRenderWindow_drawRectangleShape(win, rec, NULL);
 		break;
 	case 1:
@@ -257,6 +197,8 @@ void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int 
 	case 6:
 	case 8:
 	case 10:
+		if (debug)
+			printf("Size (%f, %f)\nPosition (%f, %f)\n", ((float)1280 / 74 - 2) / 1.5, (float)(currentTime - startTime), (float)getPosForNote(pitch), (float)(880 - startTime));
 		sfRectangleShape_setFillColor(rec, (sfColor){
 			channelColors[channel].r * 0.5,
 			channelColors[channel].g * 0.5,
@@ -265,16 +207,40 @@ void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int 
 		});
 		sfRectangleShape_setSize(rec, (sfVector2f){((float)1280 / 74 - 2) / 1.5, currentTime - startTime});
 		sfRectangleShape_setOrigin(rec, (sfVector2f){0, currentTime - startTime});
-		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 880 + ticks - startTime});
+		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 880 - startTime});
 		sfRenderWindow_drawRectangleShape(win, rec, NULL);
 		break;
 	}
 }
 
-void	displayNotes(EventList **allevents, int *allticks, char playingNotes[16][127], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec)
+char	*getEventString(Event *event)
+{
+	static char	buffer[1024];
+	char		*type;
+
+	if (!event)
+		return (NULL);
+	type = getMidiEventTypeString(event->type);
+	if (event->type == MidiNoteReleased || event->type == MidiNotePressed)
+		sprintf(buffer,
+			"%s (%i) in %i ticks [channel: %i, pitch: %i (%s), velocity: %i]",
+			type,
+			event->type,
+			event->timeToAppear,
+			((MidiNote *)event->infos)->channel,
+			((MidiNote *)event->infos)->pitch,
+			getNoteString(((MidiNote *)event->infos)->pitch),
+			((MidiNote *)event->infos)->velocity
+		);
+	else
+		sprintf(buffer, "%s (%i) in %i ticks", type, event->type, event->timeToAppear);
+	return (buffer);
+}
+
+void	displayNotes(EventList **allevents, int *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, bool debug)
 {
 	int		time = 0;
-	int		rectSize[16][127];
+	int		rectSize[16][128];
 	int		ticks;
 	EventList	*events;
 
@@ -284,45 +250,52 @@ void	displayNotes(EventList **allevents, int *allticks, char playingNotes[16][12
 		events = allevents[i];
 		ticks = allticks[i];
 		time = 0;
-		for (; events && time + events->data->timeToAppear - ticks < 1900; events = events->next) {
-			time += events->data->timeToAppear;
+		for (; events && (int)(time += events->data->timeToAppear) - (int)ticks < 1900; events = events->next) {
 			if (!events->data)
 				continue;
 			if (events->data->type == MidiNotePressed) {
-				if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] >= 0)
-					displayNote(
+				if(debug)
+					printf("Note %s is pressed on channel %i ! (%i)\n", 
+						getNoteString(((MidiNote *)events->data->infos)->pitch),
 						((MidiNote *)events->data->infos)->channel,
-						((MidiNote *)events->data->infos)->pitch,
-						rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch],
-						time,
-						ticks,
-						rec,
-						win
+						time
 					);
-				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = time;
+				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = time - ticks;
 			} else if (events->data->type == MidiNoteReleased) {
 				displayNote(
 					((MidiNote *)events->data->infos)->channel,
 					((MidiNote *)events->data->infos)->pitch,
 					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch],
-					time,
-					ticks,
+					time - ticks,
 					rec,
-					win
+					win,
+					debug
 				);
 				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = -2;
 			}
 		}
+		if(debug)
+			printf(!events ? "End of events list !\n\n" : "Stopped because %i + %i - %i () >= 1900 (Next event: %s)\n\n",
+				time,
+				events->data->timeToAppear,
+				ticks,
+				getEventString(events ? events->data : NULL)
+			);
+		for (unsigned char i = 0; i < 16; i++)
+			for (unsigned char j = 0; j < 128; j++)
+				if (rectSize[i][j] >= 0) {
+					displayNote(i, j, rectSize[i][j], time, rec, win, debug);
+					rectSize[i][j] = -2;
+				}
 	}
 	for (unsigned char i = 0; i < 16; i++)
-		for (unsigned char j = 0; j < 127; j++)
-			if (rectSize[i][j] >= 0)
-				displayNote(i, j, rectSize[i][j], 880, 0, rec, win);
-			else if (rectSize[i][j] != -2 && playingNotes[i][j])
-				displayNote(i, j, 0, 880, 0, rec, win);
+		for (unsigned char j = 0; j < 128; j++)
+			if (rectSize[i][j] != -2 && playingNotes[i][j])
+				displayNote(i, j, 0, 880, rec, win, debug);
+	if(debug)printf("\n\n");
 }
 
-void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNotes[16][127])
+void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos)
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += TICKS;
@@ -333,6 +306,8 @@ void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNote
 				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity;
 			else if (events[i]->data->type == MidiNoteReleased)
 				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = 0;
+			else if (events[i]->data->type == MidiTempoChanged)
+				infos->tempo = *(int *)events[i]->data->infos;
 			events[i] = events[i]->next;
 		}
 }
@@ -347,25 +322,29 @@ bool	noEventsLeft(EventList **events, int nbOfTracks)
 	return (true);
 }
 
-void	displayMidi(MidiParser *result, char *path)
+void	displayMidi(MidiParser *result, char *path, bool debug)
 {
 	EventList	*events[result->nbOfTracks];
 	sfVideoMode	mode = {1280, 960, 32};
 	sfEvent		event;
 	sfRectangleShape*rect = sfRectangleShape_create();
 	sfRenderWindow	*window = sfRenderWindow_create(mode, path, sfClose, NULL);
-	char		playingNotes[16][127];
+	char		playingNotes[16][128];
 	unsigned int	elapsedTicks = 0;
 	char		buffer[100];
 	sfText		*text = sfText_create();
 	sfFont		*font = sfFont_createFromFile("arial.ttf");
 	int		tmp[result->nbOfTracks];
+	MidiInfos	infos;
+	bool		go = !debug;
+	bool		pressed = false;
 	
 	if (!window || !text)
 		return;
 	for (int i = 0; i < 16; i++)
 		memset(playingNotes[i], 0, sizeof(playingNotes[i]));
 	memset(tmp, 0, sizeof(tmp));
+	memset(&infos, 0, sizeof(infos));
 	for (int i = 0; i < result->nbOfTracks; i++)
 		events[i] = &result->tracks[i].events;
 	sfText_setCharacterSize(text, 10);
@@ -374,28 +353,44 @@ void	displayMidi(MidiParser *result, char *path)
 	sfText_setFont(text, font);
 	sfText_setColor(text, (sfColor){255, 255, 255, 255});
 	sfRenderWindow_setFramerateLimit(window, 60);
-	sfRenderWindow_clear(window, (sfColor){120, 120, 200, 255});
-	sfText_setPosition(text, (sfVector2f){600, 450});
-	sfText_setString(text, "Loading");
-	sfRenderWindow_drawText(window, text, NULL);
-	sfRenderWindow_display(window);
-	sfText_setCharacterSize(text, 10);
 	sfText_setPosition(text, (sfVector2f){0, 0});
 	while (sfRenderWindow_isOpen(window)) {
+		pressed = false;
 		while (sfRenderWindow_pollEvent(window, &event)) {
 			if (event.type == sfEvtClosed)
 				sfRenderWindow_close(window);
+			if (event.type == sfEvtKeyPressed) {
+				if (debug && event.key.code == sfKeySpace)
+					go = !go;
+				else if (!go && event.key.code == sfKeyRight) {
+					elapsedTicks += TICKS;
+					pressed = true;
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos);
+				} else if (event.key.code == sfKeyLeft) {
+					elapsedTicks -= TICKS;
+					for (int i = 0; i < 16; i++)
+						memset(playingNotes[i], 0, sizeof(playingNotes[i]));
+					pressed = true;
+					for (int i = 0; i < result->nbOfTracks; i++) {
+						tmp[i] = elapsedTicks - TICKS;
+						events[i] = &result->tracks[i].events;
+					}
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos);
+				}
+			}
 		}
-		sfRenderWindow_clear(window, (sfColor){0, 0, 0, 255});
-		displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect);
+		if (go) {
+			elapsedTicks += TICKS;
+			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos);
+		}
+		sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
+		displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, pressed);
 		displayPianoKeys(playingNotes, rect, window);
 		sprintf(buffer, "Ticks %u", elapsedTicks);
 		sfText_setString(text, buffer);
 		sfRenderWindow_drawText(window, text, NULL);
 		sfRenderWindow_display(window);
-		elapsedTicks += TICKS;
-		updateEvents(events, tmp, result->nbOfTracks, playingNotes);
-		if (noEventsLeft(events, result->nbOfTracks))
+		if (!debug && noEventsLeft(events, result->nbOfTracks))
 			sfRenderWindow_close(window);
         }
 	sfRenderWindow_destroy(window);
@@ -407,11 +402,11 @@ int	main(int argc, char **args)
 {
 	MidiParser	*result;
 
-	if (argc != 2 && argc != 3) {
+	if (argc < 2) {
 		printf("Usage: %s <file.mid> [debug]\n", args[0]);
 		return (EXIT_FAILURE);
 	}
-	result = parseMidi(args[1], argc == 3 && strcmp(args[2], "debug") == 0);
+	result = parseMidi(args[1], argc >= 3 && strcmp(args[2], "debug") == 0);
 	if (!result)
 		printf("An error occured when reading %s\n", args[1]);
 	else {
@@ -420,7 +415,7 @@ int	main(int argc, char **args)
 			printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
 		} else
 			printf("division: %i ticks / 1/4 note\n", result->ticks);
-		displayMidi(result, args[1]);
+		displayMidi(result, args[1], argc >= 4 && strcmp(args[3], "debug") == 0);
 		deleteMidiParserStruct(result);
 	}
 	return (EXIT_SUCCESS);
