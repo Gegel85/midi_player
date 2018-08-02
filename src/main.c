@@ -264,6 +264,7 @@ void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int 
 			channelColors[channel].a
 		});
 		sfRectangleShape_setSize(rec, (sfVector2f){((float)1280 / 74 - 2) / 1.5, currentTime - startTime});
+		sfRectangleShape_setOrigin(rec, (sfVector2f){0, currentTime - startTime});
 		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 880 + ticks - startTime});
 		sfRenderWindow_drawRectangleShape(win, rec, NULL);
 		break;
