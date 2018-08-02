@@ -337,6 +337,16 @@ void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNote
 		}
 }
 
+bool	noEventsLeft(EventList **events, int nbOfTracks)
+{
+	for (int i = 0; i < nbOfTracks; i++) {
+		if (events[i]) {
+			return (false);
+		}
+	}
+	return (true);
+}
+
 void	displayMidi(MidiParser *result, char *path)
 {
 	EventList	*events[result->nbOfTracks];
@@ -385,6 +395,8 @@ void	displayMidi(MidiParser *result, char *path)
 		sfRenderWindow_display(window);
 		elapsedTicks += TICKS;
 		updateEvents(events, tmp, result->nbOfTracks, playingNotes);
+		if (noEventsLeft(events, result->nbOfTracks))
+			sfRenderWindow_close(window);
         }
 	sfRenderWindow_destroy(window);
 	sfFont_destroy(font);
