@@ -33,7 +33,7 @@ const sfColor	channelColors[16] = {
 	{255, 255, 0  , 255},
 	{255, 0  , 255, 255},
 	{0  , 255, 255, 255},
-	{120, 120, 120, 255},
+	{100, 100, 100, 255},
 	{255, 120, 0  , 255},
 	{255, 120, 120, 255},
 	{120, 0  , 255, 255},
@@ -41,8 +41,8 @@ const sfColor	channelColors[16] = {
 	{0  , 0  , 120, 255},
 	{120, 120, 255, 255},
 	{120, 255, 120, 255},
-	{20 , 20 , 20 , 255},
-	{255, 255, 255, 255},
+	{116 , 26 , 26 , 255},
+	{200, 200, 200, 255},
 };
 
 Note	*createNote(unsigned char pitch, unsigned char channel, unsigned long timeBeforeAppear, unsigned long duration, int velocity)
