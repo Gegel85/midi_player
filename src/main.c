@@ -297,21 +297,22 @@ void	displayNotes(EventList **allevents, int *allticks, char playingNotes[16][12
 	if(debug)printf("\n\n");
 }
 
-void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[16][128], bool debug, unsigned int speed)
+void	updateEvents(EventList **events, int *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, unsigned int *speed, unsigned int *notes)
 {
 	for (int i = 0; i < nbOfTracks; i++)
-		tmp[i] += speed;
+		tmp[i] += *speed;
 	for (int i = 0; i < nbOfTracks; i++)
 		while (events[i] && events[i]->data->timeToAppear < tmp[i]) {
 			tmp[i] -= events[i]->data->timeToAppear;
 			if (events[i]->data->type == MidiNotePressed) {
 				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity;
-				if (sounds[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch]) {
+				if (sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
 					if (debug)
 						printf("Playing note %s on channel %i\n", getNoteString(((MidiNote *)events[i]->data->infos)->pitch), ((MidiNote *)events[i]->data->infos)->channel);
 					sfSound_setVolume(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch], (float)((MidiNote *)events[i]->data->infos)->velocity * 100 / 127);
 					sfSound_play(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]);
 				}
+				*notes = *notes + 1;
 			} else if (events[i]->data->type == MidiNoteReleased) {
 				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = 0;
 				if (sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
@@ -353,14 +354,14 @@ int	findClosestBuffer(sfSoundBuffer *buffers[128], int startIndex)
 	return (-1);
 }
 
-void	loadSounds(char *path, sfSound *sounds[16][128], sfSoundBuffer *soundBuffers[16][128], bool debug)
+void	loadSounds(char *path, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], bool debug)
 {
 	char		buffer[1024];
 	char		*note;
 	double		pitch[128];	
 	sfSoundBuffer	*buffers[128];
 
-	for (int i = 0; i < 16; i++)
+	for (int i = 0; i < 2; i++)
 		for (int j = 0; j < 128; j++) {
 			sounds[i][j] = NULL;
 			soundBuffers[i][j] = NULL;
@@ -399,19 +400,18 @@ void	loadSounds(char *path, sfSound *sounds[16][128], sfSoundBuffer *soundBuffer
 			}
 		}
 	}
-	for (int i = 1; i < 16; i++)
-		for (int j = 0; j < 128; j++) {
-			soundBuffers[i][j] = soundBuffers[i - 1][j] ? sfSoundBuffer_copy(soundBuffers[i - 1][j]) : NULL;
-			if (soundBuffers[i - 1][j]) {
-				sounds[i][j] = sfSound_create();
-				if (sounds[i][j])
-					sfSound_setBuffer(sounds[i][j], soundBuffers[i - 1][j]);
-				if (pitch[j])
-					sfSound_setPitch(sounds[i][j], pitch[j]);
-			}
+	for (int j = 0; j < 128; j++) {
+		soundBuffers[1][j] = soundBuffers[0][j] ? sfSoundBuffer_copy(soundBuffers[0][j]) : NULL;
+		if (soundBuffers[0][j]) {
+			sounds[1][j] = sfSound_create();
+			if (sounds[1][j])
+				sfSound_setBuffer(sounds[1][j], soundBuffers[0][j]);
+			if (pitch[j])
+				sfSound_setPitch(sounds[1][j], pitch[j]);
 		}
+	}
 	if (debug) {
-		for (int i = 0; i < 16; i++) {
+		for (int i = 0; i < 2; i++) {
 			for (int j = 0; j < 128; j++) {
 				if (!sounds[i][j]) {
 					debug = false;
@@ -439,10 +439,11 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	int		tmp[result->nbOfTracks];
 	MidiInfos	infos;
 	bool		go = !debug;
-	sfSound		*sounds[16][128];
-	sfSoundBuffer	*soundBuffers[16][128];
+	sfSound		*sounds[2][128];
+	sfSoundBuffer	*soundBuffers[2][128];
 	bool		pressed = false;
 	unsigned int	speed = TICKS;
+	unsigned int	notesPlayed = 0;
 	
 	for (int i = strlen(progPath) - 1; i > 0; i--)
 		if (progPath[i] == '/' || progPath[i] == '\\') {
@@ -484,7 +485,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 				else if (!go && event.key.code == sfKeyRight) {
 					elapsedTicks += speed;
 					pressed = debug;
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, speed);
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &speed, &notesPlayed);
 				} else if (event.key.code == sfKeyLeft) {
 					elapsedTicks -= speed;
 					for (int i = 0; i < 16; i++)
@@ -494,10 +495,16 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 						tmp[i] = elapsedTicks - speed;
 						events[i] = &result->tracks[i].events;
 					}
+					notesPlayed = 0;
 					for (int i = 0; i < result->nbOfTracks; i++)
 						while (events[i] && events[i]->data->timeToAppear < tmp[i]) {
 							tmp[i] -= events[i]->data->timeToAppear;
 							events[i] = events[i]->next;
+							if (events[i]->data->type == MidiNotePressed) {
+								notesPlayed++;
+								playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity;
+							} else if (events[i]->data->type == MidiNoteReleased)
+								playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = 0;
 						}
 				} else if (event.key.code == sfKeyUp)
 					speed++;
@@ -508,6 +515,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 						memset(playingNotes[i], 0, sizeof(playingNotes[i]));
 					pressed = debug;
 					elapsedTicks = 0;
+					notesPlayed = 0;
 					for (int i = 0; i < result->nbOfTracks; i++) {
 						tmp[i] = 0;
 						events[i] = &result->tracks[i].events;
@@ -517,12 +525,12 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 		}
 		if (go) {
 			elapsedTicks += speed;
-			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, speed);
+			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &speed, &notesPlayed);
 		}
 		sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 		displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, pressed);
 		displayPianoKeys(playingNotes, rect, window);
-		sprintf(buffer, "Ticks %u\nTicks per frame: %u\n", elapsedTicks, speed);
+		sprintf(buffer, "Ticks %u\nTicks per frame: %u\nNotes played: %u/%u\n", elapsedTicks, speed, notesPlayed, result->nbOfNotes);
 		sfText_setString(text, buffer);
 		sfRenderWindow_drawText(window, text, NULL);
 		sfRenderWindow_display(window);
