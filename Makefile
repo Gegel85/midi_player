@@ -1,6 +1,7 @@
 NAME =	midi_player
 
 SRC = 	display_from_events.c		\
+	display_from_notes.c		\
 	disp_keys.c			\
 	globals.c			\
 	main.c				\

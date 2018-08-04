@@ -21,26 +21,15 @@ bool	addNote(NoteList *list, Note *data)
 {
 	if (!data)
 		return (false);
-	for (; list->next && list->next->note->timeBeforeAppear < data->timeBeforeAppear; list = list->next);
+	for (; list->next; list = list->next);
 	if (list->note) {
+		list->next = malloc(sizeof(*list->next));
 		if (!list->next) {
-			list->next = malloc(sizeof(*list->next));
-			if (!list->next) {
-				printf("Error: Cannot alloc %iB\n", (int)sizeof(*list->next));
-				return (false);
-			}
-			list->next->prev = list;
-			list->next->next = NULL;
-		} else {
-			list->next->prev = malloc(sizeof(*list->next->prev));
-			if (!list->next) {
-				printf("Error: Cannot alloc %iB\n", (int)sizeof(*list->next));
-				return (false);
-			}
-			list->next->prev->next = list->next;
-			list->next->prev->prev = list;
-			list->next = list->next->prev;
+			printf("Error: Cannot alloc %iB\n", (int)sizeof(*list->next));
+			return (false);
 		}
+		list->next->prev = list;
+		list->next->next = NULL;
 		list = list->next;
 	}
 	list->note = data;

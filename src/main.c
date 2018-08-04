@@ -113,6 +113,8 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	double		time;
 	unsigned char	volume = 100;
 	sfView		*view = sfView_createFromRect(frect);
+	bool		fromEvent = true;
+	bool		dontDisplay = false;
 	
 	for (int i = strlen(progPath) - 1; i > 0; i--)
 		if (progPath[i] == '/' || progPath[i] == '\\') {
@@ -134,15 +136,14 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	sfRectangleShape_setOutlineThickness(rect, 2);
 	sfText_setFont(text, font);
 	sfText_setColor(text, (sfColor){255, 255, 255, 255});
-	sfRenderWindow_setFramerateLimit(window, 60);
+	//sfRenderWindow_setFramerateLimit(window, 60);
 	sfText_setPosition(text, (sfVector2f){500, 450});
 	sfText_setString(text, "Loading Ressources");
 	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 	sfRenderWindow_drawText(window, text, NULL);
 	sfRenderWindow_display(window);
-	sfText_setCharacterSize(text, 10);
 	loadSounds(progPath, sounds, soundBuffers, debug);
-	notes = eventsToNotes(result);
+	sfText_setCharacterSize(text, 10);
 	sfText_setPosition(text, (sfVector2f){0, frect.top});
 	sfText_setScale(text, (sfVector2f){1, frect.height / 960});
 	sfRenderWindow_setView(window, view);
@@ -151,7 +152,6 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	clock = sfClock_create();
 	while (!isEnd) {
 		pressed = false;
-		//time = speed;
 		time = speed * sfTime_asSeconds(sfClock_getElapsedTime(clock)) * 60;
 		sfClock_restart(clock);
 		while (sfRenderWindow_isOpen(window) && sfRenderWindow_pollEvent(window, &event)) {
@@ -167,10 +167,24 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 					volume--;
 				else if (event.key.code == sfKeyA)
 					sfRenderWindow_close(window);
+				else if (event.key.code == sfKeyX)
+					dontDisplay = !dontDisplay;
 				else if (!go && event.key.code == sfKeyRight) {
 					elapsedTicks += time;
 					pressed = debug;
 					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &speed, &notesPlayed, time, volume);
+					if (!fromEvent)
+						displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
+				} else if (fromEvent && event.key.code == sfKeyW) {
+					sfText_setPosition(text, (sfVector2f){500, 450});
+					sfText_setCharacterSize(text, 20);
+					sfText_setString(text, "Converting midi events");
+					sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
+					sfRenderWindow_drawText(window, text, NULL);
+					sfRenderWindow_display(window);
+					sfText_setCharacterSize(text, 10);
+					notes = eventsToNotes(result);
+					fromEvent = false;
 				} else if (event.key.code == sfKeyLeft) {
 					elapsedTicks -= speed;
 					for (int i = 0; i < 16; i++)
@@ -181,7 +195,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 						events[i] = &result->tracks[i].events;
 					}
 					notesPlayed = 0;
-					for (int i = 0; i < result->nbOfTracks; i++)
+					for (int i = 0; fromEvent && i < result->nbOfTracks; i++)
 						while (events[i] && events[i]->data->timeToAppear < tmp[i]) {
 							tmp[i] -= events[i]->data->timeToAppear;
 							if (events[i]->data->type == MidiNotePressed) {
@@ -230,7 +244,12 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 		}
 		if (sfRenderWindow_isOpen(window)) {
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
-			displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, pressed);
+			if (!dontDisplay) {
+				if (fromEvent)
+					displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, pressed);
+				else
+					displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
+			}
 			displayPianoKeys(playingNotes, rect, window);
 			sprintf(buffer, "Ticks %.3f\nTicks per frame: %u\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n", elapsedTicks, speed, notesPlayed, result->nbOfNotes,  960 * 100 / frect.height, volume);
 			sfText_setString(text, buffer);
