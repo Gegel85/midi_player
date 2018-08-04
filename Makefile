@@ -1,6 +1,11 @@
 NAME =	midi_player
 
-SRC = 	main.c			\
+SRC = 	display_from_events.c		\
+	disp_keys.c			\
+	globals.c			\
+	main.c				\
+	sounds.c			\
+	transform_events_to_notes.c	\
 
 OBJ =	$(SRC:%.c=src/%.o)
 

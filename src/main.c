@@ -6,125 +6,7 @@
 #include <math.h>
 #include <time.h>
 #include "midi_parser.h"
-
-#define NOTE_STEP (float)1280 / 75
-#define	TICKS 32
-
-const sfColor	channelColors[16] = {
-	{255, 0  , 0  , 255},
-	{0  , 0  , 255, 255},
-	{0  , 255, 0  , 255},
-	{255, 255, 0  , 255},
-	{255, 0  , 255, 255},
-	{0  , 255, 255, 255},
-	{100, 100, 100, 255},
-	{255, 120, 0  , 255},
-	{255, 120, 120, 255},
-	{120, 0  , 255, 255},
-	{0  , 80 , 80 , 255},
-	{0  , 0  , 120, 255},
-	{120, 120, 255, 255},
-	{120, 255, 120, 255},
-	{116, 26 , 26 , 255},
-	{200, 200, 200, 255},
-};
-
-typedef struct {
-	int	tempo;
-	
-} MidiInfos;
-
-sfFloatRect	frect = {0, 0, 1280, 960};
-
-float	getPosForNote(unsigned char pitch)
-{
-	switch (pitch % 12) {
-	case 0:
-		return (pitch / 12 * NOTE_STEP * 7);
-	case 1:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP - 6);
-	case 2:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP);
-	case 3:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 2 - 6);
-	case 4:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 2);
-	case 5:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 3);
-	case 6:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 4 - 6);
-	case 7:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 4);
-	case 8:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 5 - 6);
-	case 9:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 5);
-	case 10:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6 - 6);
-	case 11:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6);
-	}
-	return (pitch / 12 * NOTE_STEP * 7);
-}
-
-void	displayPianoKeys(char playingNotes[16][128], sfRectangleShape *rec, sfRenderWindow *win)
-{
-	bool	drawOneBefore = false;
-	float	last = 0;
-	sfColor	color;
-
-	sfRectangleShape_setOrigin(rec, (sfVector2f){0, 0});
-	if (!rec)
-		return;
-	for (int i = 0; i < 128; i++) {
-		switch (i % 12) {
-		case 0:
-		case 2:
-		case 4:
-		case 5:
-		case 7:
-		case 9:
-		case 11:
-			sfRectangleShape_setPosition(rec, (sfVector2f){last + 1, 960 - 80 * frect.height / 960});
-			color = (sfColor){255, 255, 255, 255};
-			for (int j = 0; j < 16; j++)
-				if (playingNotes[j][i]) {
-					color = channelColors[j];
-					break;
-				}
-			sfRectangleShape_setFillColor(rec, color);
-			sfRectangleShape_setSize(rec, (sfVector2f){NOTE_STEP - 2, 80 * frect.height / 960});
-			sfRenderWindow_drawRectangleShape(win, rec, NULL);
-			if (drawOneBefore) {
-				sfRectangleShape_setPosition(rec, (sfVector2f){last - 6, 960 - 80 * frect.height / 960});
-				color = (sfColor){0, 0, 0, 255};
-				for (int j = 0; j < 16; j++)
-					if (playingNotes[j][i - 1]) {
-						color = (sfColor){
-							channelColors[j].r * 0.5,
-							channelColors[j].g * 0.5,
-							channelColors[j].b * 0.5,
-							channelColors[j].a
-						};
-						break;
-					}
-				sfRectangleShape_setFillColor(rec, color);
-				sfRectangleShape_setSize(rec, (sfVector2f){(NOTE_STEP - 2) / 1.5, 40 * frect.height / 960});
-				sfRenderWindow_drawRectangleShape(win, rec, NULL);
-			}
-			drawOneBefore = false;
-			last += NOTE_STEP;
-			break;
-		case 1:
-		case 3:
-		case 6:
-		case 8:
-		case 10:
-			drawOneBefore = true;
-			break;
-		}
-	}
-}
+#include "header.h"
 
 char	*getMidiEventTypeString(EventType type)
 {
@@ -171,47 +53,6 @@ char	*getMidiEventTypeString(EventType type)
 	return ("Unknown event");
 }
 
-void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug)
-{
-	if (debug)
-		printf("Displaying %s from channel %i (startTime: %i, currentTime: %i)\n", getNoteString(pitch), channel, startTime, currentTime);
-	switch (pitch % 12) {
-	case 0:
-	case 2:
-	case 4:
-	case 5:
-	case 7:
-	case 9:
-	case 11:
-		if (debug)
-			printf("Size (%f, %f)\nPosition (%f, %f)\n", (NOTE_STEP - 2), (float)(currentTime - startTime), (float)getPosForNote(pitch), (float)(960 - 80 * frect.height / 960 - startTime));
-		sfRectangleShape_setFillColor(rec, channelColors[channel]);
-		sfRectangleShape_setSize(rec, (sfVector2f){(float)1280 / 74 - 2, currentTime - startTime});
-		sfRectangleShape_setOrigin(rec, (sfVector2f){0, currentTime - startTime});
-		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 960 - 80 * frect.height / 960 - startTime});
-		sfRenderWindow_drawRectangleShape(win, rec, NULL);
-		break;
-	case 1:
-	case 3:
-	case 6:
-	case 8:
-	case 10:
-		if (debug)
-			printf("Size (%f, %f)\nPosition (%f, %f)\n", (NOTE_STEP - 2) / 1.5, (float)(currentTime - startTime), (float)getPosForNote(pitch), (float)(960 - 80 * frect.height / 960 - startTime));
-		sfRectangleShape_setFillColor(rec, (sfColor){
-			channelColors[channel].r * 0.5,
-			channelColors[channel].g * 0.5,
-			channelColors[channel].b * 0.5,
-			channelColors[channel].a
-		});
-		sfRectangleShape_setSize(rec, (sfVector2f){(NOTE_STEP - 2) / 1.5, currentTime - startTime});
-		sfRectangleShape_setOrigin(rec, (sfVector2f){0, currentTime - startTime});
-		sfRectangleShape_setPosition(rec, (sfVector2f){getPosForNote(pitch), 960 - 80 * frect.height / 960 - startTime});
-		sfRenderWindow_drawRectangleShape(win, rec, NULL);
-		break;
-	}
-}
-
 char	*getEventString(Event *event)
 {
 	static char	buffer[1024];
@@ -236,101 +77,6 @@ char	*getEventString(Event *event)
 	return (buffer);
 }
 
-void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, bool debug)
-{
-	int		time = 0;
-	int		rectSize[16][128];
-	double		ticks;
-	EventList	*events;
-
-	for (int i = 0; i < 16; i++)
-		memset(rectSize[i], -1, sizeof(rectSize[i]));
-	for (int i = 0; i < nbOfTracks; i++) {
-		events = allevents[i];
-		ticks = allticks[i];
-		time = 0;
-		for (; events && (int)(time += events->data->timeToAppear) - (int)ticks < frect.height; events = events->next) {
-			if (!events->data)
-				continue;
-			if (events->data->type == MidiNotePressed) {
-				if(debug)
-					printf("Note %s is pressed on channel %i ! (%i)\n", 
-						getNoteString(((MidiNote *)events->data->infos)->pitch),
-						((MidiNote *)events->data->infos)->channel,
-						time
-					);
-				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = time - ticks;
-			} else if (events->data->type == MidiNoteReleased) {
-				if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] == -2)
-					continue;
-				if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] < 0 && !playingNotes[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch]) {
-					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = -2;
-					continue;
-				}
-				displayNote(
-					((MidiNote *)events->data->infos)->channel,
-					((MidiNote *)events->data->infos)->pitch,
-					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch],
-					time - ticks,
-					rec,
-					win,
-					debug
-				);
-				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = -2;
-			}
-		}
-		if(debug)
-			printf(!events ? "End of events list !\n\n" : "Stopped because %i + %i - %3.f () >= 1900 (Next event: %s)\n\n",
-				time,
-				events->data->timeToAppear,
-				ticks,
-				getEventString(events ? events->data : NULL)
-			);
-		for (unsigned char i = 0; i < 16; i++)
-			for (unsigned char j = 0; j < 128; j++)
-				if (rectSize[i][j] >= 0) {
-					displayNote(i, j, rectSize[i][j], time, rec, win, debug);
-					rectSize[i][j] = -2;
-				}
-	}
-	for (unsigned char i = 0; i < 16; i++)
-		for (unsigned char j = 0; j < 128; j++)
-			if (rectSize[i][j] != -2 && playingNotes[i][j])
-				displayNote(i, j, 0, frect.height, rec, win, debug);
-	if(debug)printf("\n\n");
-}
-
-void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, unsigned int *speed, unsigned int *notes, double time, unsigned char volume)
-{
-	for (int i = 0; i < nbOfTracks; i++)
-		tmp[i] += time;
-	for (int i = 0; i < nbOfTracks; i++)
-		while (events[i] && events[i]->data->timeToAppear < tmp[i]) {
-			tmp[i] -= events[i]->data->timeToAppear;
-			if (events[i]->data->type == MidiNotePressed) {
-				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity;
-				if (sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
-					if (debug)
-						printf("Playing note %s on channel %i\n", getNoteString(((MidiNote *)events[i]->data->infos)->pitch), ((MidiNote *)events[i]->data->infos)->channel);
-					sfSound_setVolume(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch], (float)((MidiNote *)events[i]->data->infos)->velocity * volume / 127);
-					sfSound_play(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]);
-				}
-				*notes = *notes + 1;
-			} else if (events[i]->data->type == MidiNoteReleased) {
-				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] = 0;
-				if (sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
-					for (int k = ((MidiNote *)events[i]->data->infos)->channel % 2; k < 18; k += 2)
-						if (k >= 16)
-							sfSound_stop(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]);
-						else if (playingNotes[k][((MidiNote *)events[i]->data->infos)->pitch])
-							break;
-				}
-			} else if (events[i]->data->type == MidiTempoChanged)
-				infos->tempo = *(int *)events[i]->data->infos;
-			events[i] = events[i]->next;
-		}
-}
-
 bool	noEventsLeft(EventList **events, int nbOfTracks)
 {
 	for (int i = 0; i < nbOfTracks; i++) {
@@ -341,97 +87,12 @@ bool	noEventsLeft(EventList **events, int nbOfTracks)
 	return (true);
 }
 
-double	getNoteFrequency(char note)
-{
-	return (pow(2, (double)(note - 69) / 12.0) * 440);
-}
-
-int	findClosestBuffer(sfSoundBuffer *buffers[128], int startIndex)
-{
-	for (int i = 0; startIndex + i < 128 || startIndex - i >= 0; i++) {
-		if (startIndex + i < 128 && buffers[startIndex + i])
-			return (startIndex + i);
-		if (startIndex - i >= 0 && buffers[startIndex - i])
-			return (startIndex - i);
-	}
-	return (-1);
-}
-
-void	loadSounds(char *path, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], bool debug)
-{
-	char		buffer[1024];
-	char		*note;
-	double		pitch[128];	
-	sfSoundBuffer	*buffers[128];
-
-	for (int i = 0; i < 2; i++)
-		for (int j = 0; j < 128; j++) {
-			sounds[i][j] = NULL;
-			soundBuffers[i][j] = NULL;
-		}
-	memset(pitch, 0, sizeof(pitch));
-	for (int j = 0; j < 128; j++) {
-		note = getNoteString(j);
-		note[0] += 'a' - 'A';
-		sprintf(buffer, "%ssounds/Grand Piano4/%smmell.wav", path, note);
-		soundBuffers[0][j] = sfSoundBuffer_createFromFile(buffer);
-		if (soundBuffers[0][j]) {
-			sounds[0][j] = sfSound_create();
-			if (sounds[0][j])
-				sfSound_setBuffer(sounds[0][j], soundBuffers[0][j]);
-		} else
-			sounds[0][j] = NULL;
-	}
-	for (int i = 0; i < 128; i++)
-		buffers[i] = soundBuffers[0][i];
-	for (int j = 0, i = 0; j < 128; j++) {
-		if (!soundBuffers[0][j]) {
-			i = findClosestBuffer(buffers, j);
-			if (i < 0) {
-				printf("No sound could be loaded\n");
-				return;
-			}
-			soundBuffers[0][j] = soundBuffers[0][i];
-			if (soundBuffers[0][j]) {
-				sounds[0][j] = sfSound_create();
-				if (sounds[0][j]) {
-					sfSound_setBuffer(sounds[0][j], soundBuffers[0][j]);
-					sfSound_setPitch(sounds[0][j], getNoteFrequency(j) / getNoteFrequency(i));
-					pitch[j] = getNoteFrequency(j) / getNoteFrequency(i);
-					if (debug)printf("Creating %i from %i (Ratio: %f)\n", j, i, pitch[j]);
-				}
-			}
-		}
-	}
-	for (int j = 0; j < 128; j++) {
-		soundBuffers[1][j] = soundBuffers[0][j] ? sfSoundBuffer_copy(soundBuffers[0][j]) : NULL;
-		if (soundBuffers[0][j]) {
-			sounds[1][j] = sfSound_create();
-			if (sounds[1][j])
-				sfSound_setBuffer(sounds[1][j], soundBuffers[0][j]);
-			if (pitch[j])
-				sfSound_setPitch(sounds[1][j], pitch[j]);
-		}
-	}
-	if (debug) {
-		for (int i = 0; i < 2; i++) {
-			for (int j = 0; j < 128; j++) {
-				if (!sounds[i][j]) {
-					debug = false;
-					printf("Sound[%i][%i] is not set !\n", i, j);
-				}
-			}
-		}
-		if (debug)
-			printf("No sound problems found\n");
-	}
-}
-
 void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 {
 	EventList	*events[result->nbOfTracks];
 	sfVideoMode	mode = {1280, 960, 32};
 	sfEvent		event;
+	NoteList	notes;
 	sfRectangleShape*rect = sfRectangleShape_create();
 	sfRenderWindow	*window = sfRenderWindow_create(mode, path, sfClose | sfResize, NULL);
 	char		playingNotes[16][128];
@@ -481,6 +142,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	sfRenderWindow_display(window);
 	sfText_setCharacterSize(text, 10);
 	loadSounds(progPath, sounds, soundBuffers, debug);
+	notes = eventsToNotes(result);
 	sfText_setPosition(text, (sfVector2f){0, frect.top});
 	sfText_setScale(text, (sfVector2f){1, frect.height / 960});
 	sfRenderWindow_setView(window, view);
