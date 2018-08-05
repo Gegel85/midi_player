@@ -156,7 +156,6 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 		pressed = false;
 		seconds = sfTime_asSeconds(sfClock_getElapsedTime(clock));
 		sfClock_restart(clock);
-		midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
 		time = speed * seconds * infos.signature.ticksPerQuarterNote * 128000000 / (infos.tempo ?: 10000000);
 		while (sfRenderWindow_isOpen(window) && sfRenderWindow_pollEvent(window, &event)) {
 			if (event.type == sfEvtClosed) {
@@ -190,12 +189,12 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 					notes = eventsToNotes(result);
 					fromEvent = false;
 				} else if (event.key.code == sfKeyLeft) {
-					elapsedTicks -= speed;
+					elapsedTicks -= 100;
 					for (int i = 0; i < 16; i++)
 						memset(playingNotes[i], 0, sizeof(playingNotes[i]));
 					pressed = debug;
 					for (int i = 0; i < result->nbOfTracks; i++) {
-						tmp[i] = elapsedTicks - speed;
+						tmp[i] = elapsedTicks - 100;
 						events[i] = &result->tracks[i].events;
 					}
 					notesPlayed = 0;
@@ -244,6 +243,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 		}
 		if (go || !sfRenderWindow_isOpen(window)) {
 			elapsedTicks += time;
+			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
 			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &speed, &notesPlayed, time, volume);
 		}
 		if (sfRenderWindow_isOpen(window)) {
