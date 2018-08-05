@@ -1,5 +1,4 @@
 #define NOTE_STEP (float)1280 / 75
-#define	TICKS 32
 
 #include <SFML/Graphics.h>
 #include <SFML/Audio.h>
@@ -28,8 +27,9 @@ typedef struct	NoteList {
 } NoteList;
 
 typedef struct {
-	int	tempo;
-	
+	int			tempo;
+	int			clockTicksPerSecond;
+	MidiTimeSignature	signature;
 } MidiInfos;
 
 extern sfFloatRect	frect;
@@ -41,4 +41,4 @@ void	loadSounds(char *path, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers
 void	displayNotesFromNotesList(NoteList *notes, unsigned int elapsedTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug);
 void	displayNote(unsigned char channel, unsigned char pitch, int startTime, int currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug);
 void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, bool debug);
-void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, unsigned int *speed, unsigned int *notes, double time, unsigned char volume);
+void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, double *speed, unsigned int *notes, double time, unsigned char volume);

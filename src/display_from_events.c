@@ -10,29 +10,29 @@ float	getPosForNote(unsigned char pitch)
 {
 	switch (pitch % 12) {
 	case 0:
-		return (pitch / 12 * NOTE_STEP * 7);
+		return (pitch / 12 * NOTE_STEP * 7 + 1);
 	case 1:
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP - 6);
 	case 2:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP);
+		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP + 1);
 	case 3:
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 2 - 6);
 	case 4:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 2);
+		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 2 + 1);
 	case 5:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 3);
+		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 3 + 1);
 	case 6:
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 4 - 6);
 	case 7:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 4);
+		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 4 + 1);
 	case 8:
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 5 - 6);
 	case 9:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 5);
+		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 5 + 1);
 	case 10:
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6 - 6);
 	case 11:
-		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6);
+		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6 + 1);
 	}
 	return (pitch / 12 * NOTE_STEP * 7);
 }
@@ -143,7 +143,7 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 }
 
 
-void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, unsigned int *speed, unsigned int *notes, double time, unsigned char volume)
+void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, double *speed, unsigned int *notes, double time, unsigned char volume)
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += time;
@@ -170,6 +170,8 @@ void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingN
 				}
 			} else if (events[i]->data->type == MidiTempoChanged)
 				infos->tempo = *(int *)events[i]->data->infos;
+			else if (events[i]->data->type == MidiNewTimeSignature)
+				infos->signature = *(MidiTimeSignature *)events[i]->data->infos;
 			events[i] = events[i]->next;
 		}
 }

@@ -106,7 +106,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	sfSound		*sounds[2][128];
 	sfSoundBuffer	*soundBuffers[2][128];
 	bool		pressed = false;
-	unsigned int	speed = TICKS;
+	double		speed = (float)result->ticks / 1000;
 	unsigned int	notesPlayed = 0;
 	bool		isEnd = false;
 	sfClock		*clock;
@@ -115,6 +115,8 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	sfView		*view = sfView_createFromRect(frect);
 	bool		fromEvent = true;
 	bool		dontDisplay = false;
+	float		seconds;
+	double		midiClockTicks = 0;
 	
 	for (int i = strlen(progPath) - 1; i > 0; i--)
 		if (progPath[i] == '/' || progPath[i] == '\\') {
@@ -129,6 +131,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 		memset(playingNotes[i], 0, sizeof(playingNotes[i]));
 	memset(tmp, 0, sizeof(tmp));
 	memset(&infos, 0, sizeof(infos));
+	infos.signature.ticksPerQuarterNote = 24;
 	for (int i = 0; i < result->nbOfTracks; i++)
 		events[i] = &result->tracks[i].events;
 	sfText_setCharacterSize(text, 20);
@@ -136,7 +139,6 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	sfRectangleShape_setOutlineThickness(rect, 2);
 	sfText_setFont(text, font);
 	sfText_setColor(text, (sfColor){255, 255, 255, 255});
-	//sfRenderWindow_setFramerateLimit(window, 60);
 	sfText_setPosition(text, (sfVector2f){500, 450});
 	sfText_setString(text, "Loading Ressources");
 	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
@@ -152,8 +154,10 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	clock = sfClock_create();
 	while (!isEnd) {
 		pressed = false;
-		time = speed * sfTime_asSeconds(sfClock_getElapsedTime(clock)) * 60;
+		seconds = sfTime_asSeconds(sfClock_getElapsedTime(clock));
 		sfClock_restart(clock);
+		midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
+		time = speed * seconds * infos.signature.ticksPerQuarterNote * 128000000 / (infos.tempo ?: 10000000);
 		while (sfRenderWindow_isOpen(window) && sfRenderWindow_pollEvent(window, &event)) {
 			if (event.type == sfEvtClosed) {
 				sfRenderWindow_close(window);
@@ -206,9 +210,9 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 							events[i] = events[i]->next;
 						}
 				} else if (event.key.code == sfKeyUp)
-					speed++;
+					speed += 0.02;
 				else if (event.key.code == sfKeyDown)
-					speed--;
+					speed -= 0.02;
 				else if (event.key.code == sfKeyAdd) {
 					frect.height /= 1.1;
 					frect.top = 960 - frect.height;
@@ -251,7 +255,18 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 					displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
 			}
 			displayPianoKeys(playingNotes, rect, window);
-			sprintf(buffer, "Ticks %.3f\nTicks per frame: %u\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n", elapsedTicks, speed, notesPlayed, result->nbOfNotes,  960 * 100 / frect.height, volume);
+			sprintf(buffer,
+				"Ticks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n",
+				elapsedTicks,
+				midiClockTicks,
+				speed,
+				infos.tempo,
+				infos.signature.ticksPerQuarterNote * 128,
+				notesPlayed,
+				result->nbOfNotes,
+				960 * 100 / frect.height,
+				volume
+			);
 			sfText_setString(text, buffer);
 			sfRenderWindow_drawText(window, text, NULL);
 			sfRenderWindow_display(window);
@@ -277,9 +292,10 @@ int	main(int argc, char **args)
 		return (EXIT_FAILURE);
 	}
 	result = parseMidi(args[1], argc >= 3 && strcmp(args[2], "debug") == 0);
-	if (!result)
-		printf("An error occured when reading %s\n", args[1]);
-	else {
+	if (!result) {
+		printf("An error occurred when reading %s\nExit in 10 seconds\n", args[1]);
+		nanosleep((struct timespec[1]){{10, 0}}, NULL);
+	} else {
 		printf("Finished to read %s: format %hi, %hi tracks, %i notes, ", args[1], result->format, result->nbOfTracks, result->nbOfNotes);
 		if (result->fps) {
 			printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
