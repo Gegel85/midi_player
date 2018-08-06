@@ -117,11 +117,16 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	bool		dontDisplay = false;
 	float		seconds;
 	double		midiClockTicks = 0;
+	bool		displayHUD = true;
 	
-	for (int i = strlen(progPath) - 1; i > 0; i--)
+	for (int i = strlen(progPath) - 1; i >= 0; i--)
 		if (progPath[i] == '/' || progPath[i] == '\\') {
 			progPath[i + 1] = 0;
 			break;
+		} else if (i == 0) {
+			progPath[0] = '.';
+			progPath[1] = '/';
+			progPath[2] = '\0';
 		}
 	sprintf(buffer, "%sarial.ttf", progPath);
 	font = sfFont_createFromFile(buffer);
@@ -172,14 +177,17 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 					sfRenderWindow_close(window);
 				else if (event.key.code == sfKeyX)
 					dontDisplay = !dontDisplay;
+				else if (event.key.code == sfKeyM)
+					volume = 0;
 				else if (!go && event.key.code == sfKeyRight) {
-					elapsedTicks += time;
+					elapsedTicks += 100;
 					pressed = debug;
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &speed, &notesPlayed, time, volume);
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &notesPlayed, 100, volume);
 					if (!fromEvent)
 						displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
 				} else if (fromEvent && event.key.code == sfKeyW) {
-					sfText_setPosition(text, (sfVector2f){500, 450});
+					displayHUD = !displayHUD;
+					/* sfText_setPosition(text, (sfVector2f){500, 450});
 					sfText_setCharacterSize(text, 20);
 					sfText_setString(text, "Converting midi events");
 					sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
@@ -187,7 +195,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 					sfRenderWindow_display(window);
 					sfText_setCharacterSize(text, 10);
 					notes = eventsToNotes(result);
-					fromEvent = false;
+					fromEvent = false; */
 				} else if (event.key.code == sfKeyLeft) {
 					elapsedTicks -= 100;
 					for (int i = 0; i < 16; i++)
@@ -244,7 +252,7 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 		if (go || !sfRenderWindow_isOpen(window)) {
 			elapsedTicks += time;
 			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
-			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &speed, &notesPlayed, time, volume);
+			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &notesPlayed, time, volume);
 		}
 		if (sfRenderWindow_isOpen(window)) {
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
@@ -255,20 +263,24 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 					displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
 			}
 			displayPianoKeys(playingNotes, rect, window);
-			sprintf(buffer,
-				"Ticks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n",
-				elapsedTicks,
-				midiClockTicks,
-				speed,
-				infos.tempo,
-				infos.signature.ticksPerQuarterNote * 128,
-				notesPlayed,
-				result->nbOfNotes,
-				960 * 100 / frect.height,
-				volume
-			);
-			sfText_setString(text, buffer);
-			sfRenderWindow_drawText(window, text, NULL);
+			if (displayHUD) {
+				sprintf(buffer,
+					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n\n\nControls:%s\n",
+					1 / seconds,
+					elapsedTicks,
+					midiClockTicks,
+					speed,
+					infos.tempo,
+					infos.signature.ticksPerQuarterNote * 128,
+					notesPlayed,
+					result->nbOfNotes,
+					960 * 100 / frect.height,
+					volume,
+					CONTROLS
+				);
+				sfText_setString(text, buffer);
+				sfRenderWindow_drawText(window, text, NULL);
+			}
 			sfRenderWindow_display(window);
 		} else
 			nanosleep((struct timespec[1]){{0, 16666667}}, NULL);
