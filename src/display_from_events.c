@@ -78,13 +78,14 @@ void	displayNote(unsigned char channel, unsigned char pitch, double startTime, d
 	}
 }
 
-void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, bool debug)
+void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, int *nbOfNoteDisplayed, bool debug)
 {
 	double		time2 = 0;
 	double		rectSize[16][128][16];
 	double		ticks;
 	EventList	*events;
 
+	*nbOfNoteDisplayed = 0;
 	for (int i = 0; i < 16; i++)
 		for (int j = 0; j < 128; j++)
 			for (int k = 0; k < 16; k++)
@@ -156,6 +157,7 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 						win,
 						debug ? "true" : "false"
 					);
+				*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
 				displayNote(
 					((MidiNote *)events->data->infos)->channel,
 					((MidiNote *)events->data->infos)->pitch,
@@ -173,6 +175,7 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 			for (unsigned char j = 0; j < 128; j++)
 				for (int k = 0; k < 16; k++)
 					if (rectSize[i][j][k] >= 0) {
+						*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
 						displayNote(i, j, rectSize[i][j][k], frect.height + 1000, rec, win, debug);
 						rectSize[i][j][k] = -2;
 					}
@@ -187,8 +190,10 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 	}
 	for (unsigned char i = 0; i < 16; i++)
 		for (unsigned char j = 0; j < 128; j++)
-			if (rectSize[i][j][0] != -2 && playingNotes[i][j])
+			if (rectSize[i][j][0] != -2 && playingNotes[i][j]) {
+				*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
 				displayNote(i, j, 0, frect.height, rec, win, debug);
+			}
 	if(debug)printf("\n\n");
 }
 

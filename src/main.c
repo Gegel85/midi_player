@@ -87,24 +87,18 @@ bool	noEventsLeft(EventList **events, int nbOfTracks)
 	return (true);
 }
 
-void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
+void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound *sounds[2][128], sfText *text)
 {
 	EventList	*events[result->nbOfTracks];
-	sfVideoMode	mode = {1280, 960, 32};
 	sfEvent		event;
 	NoteList	notes;
 	sfRectangleShape*rect = sfRectangleShape_create();
-	sfRenderWindow	*window = sfRenderWindow_create(mode, path, sfClose | sfResize, NULL);
 	char		playingNotes[16][128];
 	double		elapsedTicks = 0;
 	char		buffer[1000];
-	sfText		*text = sfText_create();
-	sfFont		*font;
 	double		tmp[result->nbOfTracks];
 	MidiInfos	infos;
 	bool		go = !debug;
-	sfSound		*sounds[2][128];
-	sfSoundBuffer	*soundBuffers[2][128];
 	bool		pressed = false;
 	double		speed = (float)result->ticks / 1000;
 	unsigned int	notesPlayed = 0;
@@ -118,38 +112,17 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 	float		seconds;
 	double		midiClockTicks = 0;
 	bool		displayHUD = true;
+	int		nbOfNotesDisplayed = 0;
 	
-	for (int i = strlen(progPath) - 1; i >= 0; i--)
-		if (progPath[i] == '/' || progPath[i] == '\\') {
-			progPath[i + 1] = 0;
-			break;
-		} else if (i == 0) {
-			progPath[0] = '.';
-			progPath[1] = '/';
-			progPath[2] = '\0';
-		}
-	sprintf(buffer, "%sarial.ttf", progPath);
-	font = sfFont_createFromFile(buffer);
-	if (!window || !text)
-		return;
 	for (int i = 0; i < 16; i++)
 		memset(playingNotes[i], 0, sizeof(playingNotes[i]));
 	memset(tmp, 0, sizeof(tmp));
 	memset(&infos, 0, sizeof(infos));
+	sfRectangleShape_setOutlineColor(rect, (sfColor){0, 0, 0, 255});
+	sfRectangleShape_setOutlineThickness(rect, 2);
 	infos.signature.ticksPerQuarterNote = 24;
 	for (int i = 0; i < result->nbOfTracks; i++)
 		events[i] = &result->tracks[i].events;
-	sfText_setCharacterSize(text, 20);
-	sfRectangleShape_setOutlineColor(rect, (sfColor){0, 0, 0, 255});
-	sfRectangleShape_setOutlineThickness(rect, 2);
-	sfText_setFont(text, font);
-	sfText_setColor(text, (sfColor){255, 255, 255, 255});
-	sfText_setPosition(text, (sfVector2f){500, 450});
-	sfText_setString(text, "Loading Ressources");
-	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
-	sfRenderWindow_drawText(window, text, NULL);
-	sfRenderWindow_display(window);
-	loadSounds(progPath, sounds, soundBuffers, debug);
 	sfText_setCharacterSize(text, 10);
 	sfText_setPosition(text, (sfVector2f){0, frect.top});
 	sfText_setScale(text, (sfVector2f){1, frect.height / 960});
@@ -258,20 +231,21 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 			if (!dontDisplay) {
 				if (fromEvent)
-					displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, pressed);
+					displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, &nbOfNotesDisplayed, pressed);
 				else
 					displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
 			}
 			displayPianoKeys(playingNotes, rect, window);
 			if (displayHUD) {
 				sprintf(buffer,
-					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n\n\nControls:%s\n",
+					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n\n\nControls:%s\n",
 					1 / seconds,
 					elapsedTicks,
 					midiClockTicks,
 					speed,
 					infos.tempo,
 					infos.signature.ticksPerQuarterNote * 128,
+					nbOfNotesDisplayed,
 					notesPlayed,
 					result->nbOfNotes,
 					960 * 100 / frect.height,
@@ -284,37 +258,76 @@ void	displayMidi(MidiParser *result, char *path, char *progPath, bool debug)
 			sfRenderWindow_display(window);
 		} else
 			nanosleep((struct timespec[1]){{0, 16666667}}, NULL);
-		if (!debug && noEventsLeft(events, result->nbOfTracks)) {
-			sfRenderWindow_close(window);
+		if (!debug && noEventsLeft(events, result->nbOfTracks))
 			isEnd = true;
-		}
         }
-	sfRenderWindow_destroy(window);
 	sfClock_destroy(clock);
-	sfFont_destroy(font);
-	sfText_destroy(text);
 }
 
 int	main(int argc, char **args)
 {
 	MidiParser	*result;
+	sfRenderWindow	*window;
+	bool		debug = argc > 1 && strcmp(args[1], "debug") == 0;
+	sfSound		*sounds[2][128];
+	sfSoundBuffer	*soundBuffers[2][128];
+	sfText		*text = sfText_create();
+	sfFont		*font;
+	sfVideoMode	mode = {1280, 960, 32};
+	char		*buffer;
 
 	if (argc < 2) {
 		printf("Usage: %s <file.mid> [debug]\n", args[0]);
 		return (EXIT_FAILURE);
 	}
-	result = parseMidi(args[1], argc >= 3 && strcmp(args[2], "debug") == 0);
-	if (!result) {
-		printf("An error occurred when reading %s\nExit in 10 seconds\n", args[1]);
-		nanosleep((struct timespec[1]){{10, 0}}, NULL);
-	} else {
-		printf("Finished to read %s: format %hi, %hi tracks, %i notes, ", args[1], result->format, result->nbOfTracks, result->nbOfNotes);
-		if (result->fps) {
-			printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
-		} else
-			printf("division: %i ticks / 1/4 note\n", result->ticks);
-		displayMidi(result, args[1], args[0], argc >= 4 && strcmp(args[3], "debug") == 0);
-		deleteMidiParserStruct(result);
+	window = sfRenderWindow_create(mode, args[0], sfClose | sfResize, NULL);
+	for (int i = strlen(args[0]) - 1; i >= 0; i--)
+		if (args[0][i] == '/' || args[0][i] == '\\') {
+			args[0][i + 1] = 0;
+			break;
+		} else if (i == 0) {
+			args[0][0] = '.';
+			args[0][1] = '/';
+			args[0][2] = '\0';
+		}
+	buffer = malloc(strlen(args[0]) + 10);
+	sprintf(buffer, "%sarial.ttf", args[0]);
+	font = sfFont_createFromFile(buffer);
+	free(buffer);
+	if (!window || !text)
+		return EXIT_FAILURE;
+	sfText_setCharacterSize(text, 20);
+	sfText_setFont(text, font);
+	sfText_setColor(text, (sfColor){255, 255, 255, 255});
+	sfText_setPosition(text, (sfVector2f){500, 450});
+	sfText_setString(text, "Loading Ressources");
+	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
+	sfRenderWindow_drawText(window, text, NULL);
+	sfRenderWindow_display(window);
+	loadSounds(args[0], sounds, soundBuffers, debug);
+	for (int i = 1 + debug; i < argc; i++) {
+		sfRenderWindow_setTitle(window, args[i]);
+		result = parseMidi(args[i], strcmp(args[1], "debug") == 0);
+		if (!result) {
+			printf("An error occurred when reading %s\nExit in 10 seconds\n", args[1]);
+			nanosleep((struct timespec[1]){{10, 0}}, NULL);
+		} else {
+			printf("Finished to read %s: format %hi, %hi tracks, %i notes, ", args[1], result->format, result->nbOfTracks, result->nbOfNotes);
+			if (result->fps) {
+				printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
+			} else
+				printf("division: %i ticks / 1/4 note\n", result->ticks);
+			displayMidi(result, debug, window, sounds, text);
+			deleteMidiParserStruct(result);
+		}
 	}
+	sfRenderWindow_destroy(window);
+	sfFont_destroy(font);
+	sfText_destroy(text);
+	for (int i = 0; i < 2; i++)
+		for (int j = 0; j < 128; j++) {
+			sfSound_destroy(sounds[i][j]);
+			sfSoundBuffer_destroy(soundBuffers[i][j]);
+		}
 	return (EXIT_SUCCESS);
 }

@@ -50,6 +50,8 @@ fclean:	clean
 	$(MAKE) -C lib/midi_parser fclean
 	$(RM) $(NAME) $(NAME).exe
 
+ffclean:fclean
+
 re:	fclean all
 
 dbg:	CFLAGS += -g -O0
