@@ -84,19 +84,22 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 	double		rectSize[16][128][16];
 	double		ticks;
 	EventList	*events;
+	double		lowest[16][128];
 
 	*nbOfNoteDisplayed = 0;
 	for (int i = 0; i < 16; i++)
-		for (int j = 0; j < 128; j++)
+		for (int j = 0; j < 128; j++) {
 			for (int k = 0; k < 16; k++)
 				rectSize[i][j][k] = -1;
+			lowest[i][j] = frect.height + 100;
+		}
 	for (int i = 0; i < nbOfTracks; i++) {
 		events = allevents[i];
 		ticks = allticks[i];
 		if (debug) {
 			printf("Ticks: %f\n", ticks);
 			printf("[\n");
-			for (double time = 0; events && time + events->data->timeToAppear - ticks < frect.height + 1000; events = events->next) {
+			for (double time = 0; events && time + events->data->timeToAppear - ticks < frect.height + 100; events = events->next) {
 				time += events->data->timeToAppear;
 				printf("\t{\n");
 				printf("\t\ttype = %s,\n", getMidiEventTypeString(events->data->type));
@@ -113,7 +116,7 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 			printf("]\n");
 		}
 		events = allevents[i];
-		for (double time = 0; events && time + events->data->timeToAppear - ticks < frect.height + 1000; events = events->next) {
+		for (double time = 0; events && time + events->data->timeToAppear - ticks < frect.height + 100; events = events->next) {
 			time += events->data->timeToAppear;
 			if (!events->data)
 				continue;
@@ -131,18 +134,17 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 						break;
 					}
 			} else if (events->data->type == MidiNoteReleased) {
-				int k = 0;
-				for (; k < 16; k++)
+				int k = 15;
+				for (; k > 0; k--)
 					if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] >= 0)
 						break;
-				k %= 16;
 				if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] < 0 && !playingNotes[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch]) {
 					if (debug)
 						printf("Note %s is released on channel %i but it is not being played !\n", 
 							getNoteString(((MidiNote *)events->data->infos)->pitch),
 							((MidiNote *)events->data->infos)->channel
 						);
-					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = -2;
+					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = -1;
 					continue;
 				}
 				if (debug)
@@ -167,7 +169,11 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 					win,
 					debug
 				);
-				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = -2;
+				if (lowest[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] > rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k])
+					lowest[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k];
+				for (int i = k; i < 15; i++)
+					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k + 1];
+				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][15] = -1;
 			}
 			time2 = time;
 		}
@@ -176,24 +182,23 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 				for (int k = 0; k < 16; k++)
 					if (rectSize[i][j][k] >= 0) {
 						*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
-						displayNote(i, j, rectSize[i][j][k], frect.height + 1000, rec, win, debug);
-						rectSize[i][j][k] = -2;
+						if (lowest[i][j] > rectSize[i][j][k])
+							lowest[i][j] = rectSize[i][j][k];
+						displayNote(i, j, rectSize[i][j][k], frect.height + 100, rec, win, debug);
 					}
 		if(debug)
 			printf(!events ? "End of events list !\n\n" : "Stopped because %.2f + %i - %.3f >= %.3f (Next event: %s)\n\n",
 				time2,
 				events ? events->data->timeToAppear : 0,
 				ticks,
-				frect.height + 1000,
+				frect.height + 100,
 				getEventString(events ? events->data : NULL)
 			);
 	}
 	for (unsigned char i = 0; i < 16; i++)
 		for (unsigned char j = 0; j < 128; j++)
-			if (rectSize[i][j][0] != -2 && playingNotes[i][j]) {
-				*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
-				displayNote(i, j, 0, frect.height, rec, win, debug);
-			}
+			if (playingNotes[i][j] && lowest[i][j] > 0)
+				displayNote(i, j, 0, lowest[i][j], rec, win, debug);
 	if(debug)printf("\n\n");
 }
 

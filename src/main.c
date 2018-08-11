@@ -115,7 +115,8 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 	int		nbOfNotesDisplayed = 0;
 	
 	for (int i = 0; i < 16; i++)
-		memset(playingNotes[i], 0, sizeof(playingNotes[i]));
+		for (int j = 0; j < 128; j++)
+			playingNotes[i][j] = 0;
 	memset(tmp, 0, sizeof(tmp));
 	memset(&infos, 0, sizeof(infos));
 	sfRectangleShape_setOutlineColor(rect, (sfColor){0, 0, 0, 255});
@@ -153,7 +154,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 				else if (event.key.code == sfKeyM)
 					volume = 0;
 				else if (!go && event.key.code == sfKeyRight) {
-					elapsedTicks += 100;
+					elapsedTicks += 100 * speed;
 					pressed = debug;
 					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &notesPlayed, 100, volume);
 					if (!fromEvent)
@@ -169,10 +170,13 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 					sfText_setCharacterSize(text, 10);
 					notes = eventsToNotes(result);
 					fromEvent = false; */
-				} else if (event.key.code == sfKeyLeft) {
-					elapsedTicks -= 100;
+				} else if (event.key.code == sfKeyD)
+					pressed = debug;
+				else if (event.key.code == sfKeyLeft) {
+					elapsedTicks -= 100 * speed;
 					for (int i = 0; i < 16; i++)
-						memset(playingNotes[i], 0, sizeof(playingNotes[i]));
+						for (int j = 0; j < 128; j++)
+							playingNotes[i][j] = 0;
 					pressed = debug;
 					for (int i = 0; i < result->nbOfTracks; i++) {
 						tmp[i] = elapsedTicks - 100;
@@ -215,6 +219,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 					pressed = debug;
 					elapsedTicks = 0;
 					notesPlayed = 0;
+					midiClockTicks = 0;
 					for (int i = 0; i < result->nbOfTracks; i++) {
 						tmp[i] = 0;
 						events[i] = &result->tracks[i].events;
@@ -268,7 +273,7 @@ int	main(int argc, char **args)
 {
 	MidiParser	*result;
 	sfRenderWindow	*window;
-	bool		debug = argc > 1 && strcmp(args[1], "debug") == 0;
+	bool		debug = argc > 1 && (strcmp(args[1], "debug") == 0 || strcmp(args[1], "ddebug") == 0);
 	sfSound		*sounds[2][128];
 	sfSoundBuffer	*soundBuffers[2][128];
 	sfText		*text = sfText_create();
@@ -277,7 +282,7 @@ int	main(int argc, char **args)
 	char		*buffer;
 
 	if (argc < 2) {
-		printf("Usage: %s <file.mid> [debug]\n", args[0]);
+		printf("Usage: %s [ddebug] <file.mid>\n", args[0]);
 		return (EXIT_FAILURE);
 	}
 	window = sfRenderWindow_create(mode, args[0], sfClose | sfResize, NULL);
@@ -307,7 +312,7 @@ int	main(int argc, char **args)
 	loadSounds(args[0], sounds, soundBuffers, debug);
 	for (int i = 1 + debug; i < argc; i++) {
 		sfRenderWindow_setTitle(window, args[i]);
-		result = parseMidi(args[i], strcmp(args[1], "debug") == 0);
+		result = parseMidi(args[i], strcmp(args[1], "ddebug") == 0);
 		if (!result) {
 			printf("An error occurred when reading %s\nExit in 10 seconds\n", args[1]);
 			nanosleep((struct timespec[1]){{10, 0}}, NULL);
