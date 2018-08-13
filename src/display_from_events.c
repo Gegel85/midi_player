@@ -202,8 +202,7 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 	if(debug)printf("\n\n");
 }
 
-
-void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], bool debug, unsigned int *notes, double time, unsigned char volume)
+void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], char fadeSpeed[2][128],  bool debug, unsigned int *notes, double time, unsigned char volume)
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += time;
@@ -217,6 +216,8 @@ void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingN
 						printf("Playing note %s on channel %i\n", getNoteString(((MidiNote *)events[i]->data->infos)->pitch), ((MidiNote *)events[i]->data->infos)->channel);
 					sfSound_setVolume(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch], (float)((MidiNote *)events[i]->data->infos)->velocity * volume / 127);
 					sfSound_play(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]);
+					fadeSpeed[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch] = 0;
+					notesVolume[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity * 65535 / 127;
 				}
 				*notes = *notes + 1;
 			} else if (events[i]->data->type == MidiNoteReleased) {
@@ -225,7 +226,7 @@ void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingN
 				if (!playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] && sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
 					for (int k = ((MidiNote *)events[i]->data->infos)->channel % 2; k < 18; k += 2)
 						if (k >= 16)
-							sfSound_stop(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]);
+							fadeSpeed[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch] = -1;
 						else if (playingNotes[k][((MidiNote *)events[i]->data->infos)->pitch])
 							break;
 				}
@@ -234,5 +235,17 @@ void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingN
 			else if (events[i]->data->type == MidiNewTimeSignature)
 				infos->signature = *(MidiTimeSignature *)events[i]->data->infos;
 			events[i] = events[i]->next;
+		}
+}
+
+void	updateSounds(sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128], unsigned char volume, double time)
+{
+	for (int i = 0; i < 2; i++)
+		for (int j = 0; j < 128; j++) {
+			if (notesVolume[i][j] >= fadeSpeed[i][j] * time * 516)
+				notesVolume[i][j] -= fadeSpeed[i][j] * time * 516;
+			else
+				notesVolume[i][j] = 0;
+			sfSound_setVolume(sounds[i][j], (float)notesVolume[i][j] * volume / 65535);
 		}
 }

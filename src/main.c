@@ -94,6 +94,8 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 	NoteList	notes;
 	sfRectangleShape*rect = sfRectangleShape_create();
 	char		playingNotes[16][128];
+	unsigned short	notesVolume[2][128];
+	char		fadeSpeed[2][128];
 	double		elapsedTicks = 0;
 	char		buffer[1000];
 	double		tmp[result->nbOfTracks];
@@ -114,6 +116,11 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 	bool		displayHUD = true;
 	int		nbOfNotesDisplayed = 0;
 	
+	for (int i = 0; i < 2; i++)
+		for (int k = 0; k < 128; k++) {
+			notesVolume[i][k] = 0;
+			fadeSpeed[i][k] = 0;
+		}
 	for (int i = 0; i < 16; i++)
 		for (int j = 0; j < 128; j++)
 			playingNotes[i][j] = 0;
@@ -156,7 +163,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 				else if (!go && event.key.code == sfKeyRight) {
 					elapsedTicks += 100 * speed;
 					pressed = debug;
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &notesPlayed, 100, volume);
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, 100, volume);
 					if (!fromEvent)
 						displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
 				} else if (fromEvent && event.key.code == sfKeyW) {
@@ -230,7 +237,8 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 		if (go || !sfRenderWindow_isOpen(window)) {
 			elapsedTicks += time;
 			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
-			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, debug, &notesPlayed, time, volume);
+			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, time, volume);
+			updateSounds(sounds, notesVolume, fadeSpeed, volume, seconds);
 		}
 		if (sfRenderWindow_isOpen(window)) {
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
