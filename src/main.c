@@ -87,7 +87,7 @@ bool	noEventsLeft(EventList **events, int nbOfTracks)
 	return (true);
 }
 
-void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound *sounds[2][128], sfText *text)
+bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow *window, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], sfText *text)
 {
 	EventList	*events[result->nbOfTracks];
 	sfEvent		event;
@@ -95,7 +95,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 	sfRectangleShape*rect = sfRectangleShape_create();
 	char		playingNotes[16][128];
 	unsigned short	notesVolume[2][128];
-	char		fadeSpeed[2][128];
+	unsigned char	fadeSpeed[2][128];
 	double		elapsedTicks = 0;
 	char		buffer[1000];
 	double		tmp[result->nbOfTracks];
@@ -107,7 +107,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 	bool		isEnd = false;
 	sfClock		*clock;
 	double		time;
-	unsigned char	volume = 100;
+	static char	volume = 50;
 	sfView		*view = sfView_createFromRect(frect);
 	bool		fromEvent = true;
 	bool		dontDisplay = false;
@@ -115,6 +115,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 	double		midiClockTicks = 0;
 	bool		displayHUD = true;
 	int		nbOfNotesDisplayed = 0;
+	static Instrument	instrument = PIANO;
 	
 	for (int i = 0; i < 2; i++)
 		for (int k = 0; k < 128; k++) {
@@ -147,6 +148,8 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 			if (event.type == sfEvtClosed) {
 				sfRenderWindow_close(window);
 				isEnd = true;
+				sfClock_destroy(clock);
+				return (false);
 			} else if (event.type == sfEvtKeyPressed) {
 				if (event.key.code == sfKeySpace)
 					go = !go;
@@ -160,7 +163,45 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 					dontDisplay = !dontDisplay;
 				else if (event.key.code == sfKeyM)
 					volume = 0;
-				else if (!go && event.key.code == sfKeyRight) {
+				else if (event.key.code == sfKeyS)
+					isEnd = true;
+				else if (event.key.code == sfKeyU && instrument != PIANO) {
+					instrument = PIANO;
+					for (int i = 0; i < 2; i++)
+						for (int j = 0; j < 128; j++) {
+							sfSound_destroy(sounds[i][j]);
+							sfSoundBuffer_destroy(soundBuffers[i][j]);
+						}
+					loadSounds(progPath, sounds, soundBuffers, debug, PIANO);
+					sfClock_restart(clock);
+				} else if (event.key.code == sfKeyI && instrument != SQUARE) {
+					instrument = SQUARE;
+					for (int i = 0; i < 2; i++)
+						for (int j = 0; j < 128; j++) {
+							sfSound_destroy(sounds[i][j]);
+							sfSoundBuffer_destroy(soundBuffers[i][j]);
+						}
+					loadSounds(progPath, sounds, soundBuffers, debug, SQUARE);
+					sfClock_restart(clock);
+				} else if (event.key.code == sfKeyO && instrument != SINUSOIDE) {
+					instrument = SINUSOIDE;
+					for (int i = 0; i < 2; i++)
+						for (int j = 0; j < 128; j++) {
+							sfSound_destroy(sounds[i][j]);
+							sfSoundBuffer_destroy(soundBuffers[i][j]);
+						}
+					loadSounds(progPath, sounds, soundBuffers, debug, SINUSOIDE);
+					sfClock_restart(clock);
+				} else if (event.key.code == sfKeyP && instrument != SAWTOOTH) {
+					instrument = SAWTOOTH;
+					for (int i = 0; i < 2; i++)
+						for (int j = 0; j < 128; j++) {
+							sfSound_destroy(sounds[i][j]);
+							sfSoundBuffer_destroy(soundBuffers[i][j]);
+						}
+					loadSounds(progPath, sounds, soundBuffers, debug, SAWTOOTH);
+					sfClock_restart(clock);
+				} else if (!go && event.key.code == sfKeyRight) {
 					elapsedTicks += 100 * speed;
 					pressed = debug;
 					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, 100, volume);
@@ -238,8 +279,8 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 			elapsedTicks += time;
 			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
 			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, time, volume);
-			updateSounds(sounds, notesVolume, fadeSpeed, volume, seconds);
 		}
+		updateSounds(sounds, notesVolume, fadeSpeed, volume, seconds);
 		if (sfRenderWindow_isOpen(window)) {
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 			if (!dontDisplay) {
@@ -251,7 +292,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 			displayPianoKeys(playingNotes, rect, window);
 			if (displayHUD) {
 				sprintf(buffer,
-					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\n\n\nControls:%s\n",
+					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\nCurrent instrument: %s\n\n\nControls:%s\n",
 					1 / seconds,
 					elapsedTicks,
 					midiClockTicks,
@@ -263,6 +304,10 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 					result->nbOfNotes,
 					960 * 100 / frect.height,
 					volume,
+					instrument == PIANO ? "Piano" :
+					instrument == SQUARE ? "Square wave" :
+					instrument == SINUSOIDE ? "Sin wave" :
+					instrument == SAWTOOTH ? "Sawtooth wave" : "Error",
 					CONTROLS
 				);
 				sfText_setString(text, buffer);
@@ -275,6 +320,7 @@ void	displayMidi(MidiParser *result, bool debug, sfRenderWindow *window, sfSound
 			isEnd = true;
         }
 	sfClock_destroy(clock);
+	return (true);
 }
 
 int	main(int argc, char **args)
@@ -282,9 +328,9 @@ int	main(int argc, char **args)
 	MidiParser	*result;
 	sfRenderWindow	*window;
 	bool		debug = argc > 1 && (strcmp(args[1], "debug") == 0 || strcmp(args[1], "ddebug") == 0);
+	sfText		*text = sfText_create();
 	sfSound		*sounds[2][128];
 	sfSoundBuffer	*soundBuffers[2][128];
-	sfText		*text = sfText_create();
 	sfFont		*font;
 	sfVideoMode	mode = {1280, 960, 32};
 	char		*buffer;
@@ -317,20 +363,24 @@ int	main(int argc, char **args)
 	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 	sfRenderWindow_drawText(window, text, NULL);
 	sfRenderWindow_display(window);
-	loadSounds(args[0], sounds, soundBuffers, debug);
+	loadSounds(args[0], sounds, soundBuffers, debug, PIANO);
+	printf("Playlist contains:\n");
+	for (int i = 1 + debug; i < argc; i++)
+		printf("- %s\n", args[i]);
 	for (int i = 1 + debug; i < argc; i++) {
 		sfRenderWindow_setTitle(window, args[i]);
 		result = parseMidi(args[i], strcmp(args[1], "ddebug") == 0);
 		if (!result) {
-			printf("An error occurred when reading %s\nExit in 10 seconds\n", args[1]);
+			printf("An error occurred when reading %s\nExit in 10 seconds\n", args[i]);
 			nanosleep((struct timespec[1]){{10, 0}}, NULL);
 		} else {
-			printf("Finished to read %s: format %hi, %hi tracks, %i notes, ", args[1], result->format, result->nbOfTracks, result->nbOfNotes);
+			printf("Finished to read %s: format %hi, %hi tracks, %i notes, ", args[i], result->format, result->nbOfTracks, result->nbOfNotes);
 			if (result->fps) {
 				printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
 			} else
 				printf("division: %i ticks / 1/4 note\n", result->ticks);
-			displayMidi(result, debug, window, sounds, text);
+			if (!displayMidi(args[0], result, debug, window, sounds, soundBuffers, text))
+				i = argc;
 			deleteMidiParserStruct(result);
 		}
 	}

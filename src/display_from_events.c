@@ -197,12 +197,14 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 	}
 	for (unsigned char i = 0; i < 16; i++)
 		for (unsigned char j = 0; j < 128; j++)
-			if (playingNotes[i][j] && lowest[i][j] > 0)
+			if (playingNotes[i][j] && lowest[i][j] > 0) {
 				displayNote(i, j, 0, lowest[i][j], rec, win, debug);
+				*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
+			}
 	if(debug)printf("\n\n");
 }
 
-void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], char fadeSpeed[2][128],  bool debug, unsigned int *notes, double time, unsigned char volume)
+void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128],  bool debug, unsigned int *notes, double time, unsigned char volume)
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += time;
@@ -246,6 +248,9 @@ void	updateSounds(sfSound *sounds[2][128], unsigned short notesVolume[2][128], u
 				notesVolume[i][j] -= fadeSpeed[i][j] * time * 516;
 			else
 				notesVolume[i][j] = 0;
-			sfSound_setVolume(sounds[i][j], (float)notesVolume[i][j] * volume / 65535);
+			if (notesVolume[i][j])
+				sfSound_setVolume(sounds[i][j], (float)notesVolume[i][j] * volume / 65535);
+			else
+				sfSound_stop(sounds[i][j]);
 		}
 }
