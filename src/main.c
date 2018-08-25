@@ -116,7 +116,8 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 	bool		displayHUD = true;
 	int		nbOfNotesDisplayed = 0;
 	static Instrument	instrument = PIANO;
-	
+	bool		returnValue = true;
+
 	for (int i = 0; i < 2; i++)
 		for (int k = 0; k < 128; k++) {
 			notesVolume[i][k] = 0;
@@ -148,8 +149,7 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 			if (event.type == sfEvtClosed) {
 				sfRenderWindow_close(window);
 				isEnd = true;
-				sfClock_destroy(clock);
-				return (false);
+				returnValue = false;
 			} else if (event.type == sfEvtKeyPressed) {
 				if (event.key.code == sfKeySpace)
 					go = !go;
@@ -320,7 +320,9 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 			isEnd = true;
         }
 	sfClock_destroy(clock);
-	return (true);
+	sfRectangleShape_destroy(rect);
+	sfView_destroy(view);
+	return (returnValue);
 }
 
 int	main(int argc, char **args)
