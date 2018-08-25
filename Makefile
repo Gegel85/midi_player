@@ -20,7 +20,8 @@ CSFML = -lcsfml-audio		\
 	-lcsfml-window		\
 
 
-LDFLAGS =			\
+LDFLAGS =	\
+	-lm	\
 
 CFLAGS= $(INC)		\
 	-W		\
