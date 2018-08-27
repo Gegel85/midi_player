@@ -78,13 +78,13 @@ void	displayNote(unsigned char channel, unsigned char pitch, double startTime, d
 	}
 }
 
-void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, int *nbOfNoteDisplayed, bool debug)
+void	displayNotes(Event **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, int *nbOfNoteDisplayed, bool debug)
 {
-	double		time2 = 0;
-	double		rectSize[16][128][16];
-	double		ticks;
-	EventList	*events;
-	double		lowest[16][128];
+	double	time2 = 0;
+	double	rectSize[16][128][16];
+	double	ticks;
+	Event	*events;
+	double	lowest[16][128];
 
 	*nbOfNoteDisplayed = 0;
 	for (int i = 0; i < 16; i++)
@@ -99,60 +99,58 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 		if (debug) {
 			printf("Ticks: %f\n", ticks);
 			printf("[\n");
-			for (double time = 0; events && time + events->data->timeToAppear - ticks < frect.height + 100; events = events->next) {
-				time += events->data->timeToAppear;
+			for (double time = 0; (events->type || events->infos) && time + events->timeToAppear - ticks < frect.height + 100; events++) {
+				time += events->timeToAppear;
 				printf("\t{\n");
-				printf("\t\ttype = %s,\n", getMidiEventTypeString(events->data->type));
-				printf("\t\ttime = %i,\n", events->data->timeToAppear);
+				printf("\t\ttype = %s,\n", getMidiEventTypeString(events->type));
+				printf("\t\ttime = %i,\n", events->timeToAppear);
 				printf("\t\tcurrentTime = %.0f\n", time);
-				if (events->data->type == MidiNotePressed || events->data->type == MidiNoteReleased) {
-					printf("\t\tchannel = %u,\n", ((MidiNote *)events->data->infos)->channel);
-					printf("\t\tpitch = %u (%s),\n", ((MidiNote *)events->data->infos)->pitch, getNoteString(((MidiNote *)events->data->infos)->pitch));
-					printf("\t\tvelocity = %u,\n", ((MidiNote *)events->data->infos)->velocity);
-				} else if (events->data->type == MidiTempoChanged)
-					printf("\t\ttempo = %i,\n", *(int *)events->data->infos);
+				if (events->type == MidiNotePressed || events->type == MidiNoteReleased) {
+					printf("\t\tchannel = %u,\n", ((MidiNote *)events->infos)->channel);
+					printf("\t\tpitch = %u (%s),\n", ((MidiNote *)events->infos)->pitch, getNoteString(((MidiNote *)events->infos)->pitch));
+					printf("\t\tvelocity = %u,\n", ((MidiNote *)events->infos)->velocity);
+				} else if (events->type == MidiTempoChanged)
+					printf("\t\ttempo = %i,\n", *(int *)events->infos);
 				printf("\t},\n");
 			}
 			printf("]\n");
 		}
 		events = allevents[i];
-		for (double time = 0; events && time + events->data->timeToAppear - ticks < frect.height + 100; events = events->next) {
-			time += events->data->timeToAppear;
-			if (!events->data)
-				continue;
-			if (events->data->type == MidiNotePressed) {
+		for (double time = 0; (events->type || events->infos) && time + events->timeToAppear - ticks < frect.height + 100; events++) {
+			time += events->timeToAppear;
+			if (events->type == MidiNotePressed) {
 				if(debug)
 					printf("Note %s is pressed on channel %i ! (%f - %f)\n", 
-						getNoteString(((MidiNote *)events->data->infos)->pitch),
-						((MidiNote *)events->data->infos)->channel,
+						getNoteString(((MidiNote *)events->infos)->pitch),
+						((MidiNote *)events->infos)->channel,
 						time,
 						ticks
 					);
 				for (int k = 0; k < 16; k++)
-					if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] < 0) {
-						rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = time - ticks;
+					if (rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k] < 0) {
+						rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k] = time - ticks;
 						break;
 					}
-			} else if (events->data->type == MidiNoteReleased) {
+			} else if (events->type == MidiNoteReleased) {
 				int k = 15;
 				for (; k > 0; k--)
-					if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] >= 0)
+					if (rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k] >= 0)
 						break;
-				if (rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] < 0 && !playingNotes[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch]) {
+				if (rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k] < 0 && !playingNotes[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch]) {
 					if (debug)
 						printf("Note %s is released on channel %i but it is not being played !\n", 
-							getNoteString(((MidiNote *)events->data->infos)->pitch),
-							((MidiNote *)events->data->infos)->channel
+							getNoteString(((MidiNote *)events->infos)->pitch),
+							((MidiNote *)events->infos)->channel
 						);
-					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = -1;
+					rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k] = -1;
 					continue;
 				}
 				if (debug)
 					printf(
 						"displayNote(%i, %i, %f, %f - %f, %p, %p, %s);\n",
-						((MidiNote *)events->data->infos)->channel,
-						((MidiNote *)events->data->infos)->pitch,
-						rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k],
+						((MidiNote *)events->infos)->channel,
+						((MidiNote *)events->infos)->pitch,
+						rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k],
 						time,
 						ticks,
 						rec,
@@ -161,19 +159,19 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 					);
 				*nbOfNoteDisplayed = *nbOfNoteDisplayed + 1;
 				displayNote(
-					((MidiNote *)events->data->infos)->channel,
-					((MidiNote *)events->data->infos)->pitch,
-					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k],
+					((MidiNote *)events->infos)->channel,
+					((MidiNote *)events->infos)->pitch,
+					rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k],
 					time - ticks,
 					rec,
 					win,
 					debug
 				);
-				if (lowest[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] > rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k])
-					lowest[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch] = rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k];
+				if (lowest[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch] > rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k])
+					lowest[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch] = rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k];
 				for (int i = k; i < 15; i++)
-					rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k] = rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][k + 1];
-				rectSize[((MidiNote *)events->data->infos)->channel][((MidiNote *)events->data->infos)->pitch][15] = -1;
+					rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k] = rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][k + 1];
+				rectSize[((MidiNote *)events->infos)->channel][((MidiNote *)events->infos)->pitch][15] = -1;
 			}
 			time2 = time;
 		}
@@ -189,10 +187,10 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 		if(debug)
 			printf(!events ? "End of events list !\n\n" : "Stopped because %.2f + %i - %.3f >= %.3f (Next event: %s)\n\n",
 				time2,
-				events ? events->data->timeToAppear : 0,
+				events ? events->timeToAppear : 0,
 				ticks,
 				frect.height + 100,
-				getEventString(events ? events->data : NULL)
+				getEventString(events ? events : NULL)
 			);
 	}
 	for (unsigned char i = 0; i < 16; i++)
@@ -204,40 +202,45 @@ void	displayNotes(EventList **allevents, double *allticks, char playingNotes[16]
 	if(debug)printf("\n\n");
 }
 
-void	updateEvents(EventList **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128],  bool debug, unsigned int *notes, double time, unsigned char volume)
+void	updateEvents(Event **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128],  bool debug, unsigned int *notes, double time, unsigned char volume)
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += time;
-	for (int i = 0; i < nbOfTracks; i++)
-		while (events[i] && events[i]->data->timeToAppear < tmp[i]) {
-			tmp[i] -= events[i]->data->timeToAppear;
-			if (events[i]->data->type == MidiNotePressed) {
-				playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch]++;
-				if (sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
+	for (int i = 0; i < nbOfTracks; i++) {
+		if (debug)
+			printf("%i: Ticks: %.3f, Next event: %p {type = %i, timeToAppear = %i, infos = %p}\n", i, tmp[i], events[i], events[i]->type, events[i]->timeToAppear, events[i]->infos);
+		while ((events[i]->infos || events[i]->type) && events[i]->timeToAppear < tmp[i]) {
+			tmp[i] -= events[i]->timeToAppear;
+			if (events[i]->type == MidiNotePressed) {
+				playingNotes[((MidiNote *)events[i]->infos)->channel][((MidiNote *)events[i]->infos)->pitch]++;
+				if (sounds[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch]) {
 					if (debug)
-						printf("Playing note %s on channel %i\n", getNoteString(((MidiNote *)events[i]->data->infos)->pitch), ((MidiNote *)events[i]->data->infos)->channel);
-					sfSound_setVolume(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch], (float)((MidiNote *)events[i]->data->infos)->velocity * volume / 127);
-					sfSound_play(sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]);
-					fadeSpeed[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch] = 0;
-					notesVolume[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch] = ((MidiNote *)events[i]->data->infos)->velocity * 65535 / 127;
+						printf("Playing note %s on channel %i\n", getNoteString(((MidiNote *)events[i]->infos)->pitch), ((MidiNote *)events[i]->infos)->channel);
+					sfSound_setVolume(sounds[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch], (float)((MidiNote *)events[i]->infos)->velocity * volume / 127);
+					sfSound_play(sounds[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch]);
+					fadeSpeed[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch] = 0;
+					notesVolume[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch] = ((MidiNote *)events[i]->infos)->velocity * 65535 / 127;
 				}
 				*notes = *notes + 1;
-			} else if (events[i]->data->type == MidiNoteReleased) {
-				if (playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] > 0)
-					playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch]--;
-				if (!playingNotes[((MidiNote *)events[i]->data->infos)->channel][((MidiNote *)events[i]->data->infos)->pitch] && sounds[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch]) {
-					for (int k = ((MidiNote *)events[i]->data->infos)->channel % 2; k < 18; k += 2)
+			} else if (events[i]->type == MidiNoteReleased) {
+				if (playingNotes[((MidiNote *)events[i]->infos)->channel][((MidiNote *)events[i]->infos)->pitch] > 0)
+					playingNotes[((MidiNote *)events[i]->infos)->channel][((MidiNote *)events[i]->infos)->pitch]--;
+				if (!playingNotes[((MidiNote *)events[i]->infos)->channel][((MidiNote *)events[i]->infos)->pitch] && sounds[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch]) {
+					for (int k = ((MidiNote *)events[i]->infos)->channel % 2; k < 18; k += 2)
 						if (k >= 16)
-							fadeSpeed[((MidiNote *)events[i]->data->infos)->channel % 2][((MidiNote *)events[i]->data->infos)->pitch] = -1;
-						else if (playingNotes[k][((MidiNote *)events[i]->data->infos)->pitch])
+							fadeSpeed[((MidiNote *)events[i]->infos)->channel % 2][((MidiNote *)events[i]->infos)->pitch] = -1;
+						else if (playingNotes[k][((MidiNote *)events[i]->infos)->pitch])
 							break;
 				}
-			} else if (events[i]->data->type == MidiTempoChanged)
-				infos->tempo = *(int *)events[i]->data->infos;
-			else if (events[i]->data->type == MidiNewTimeSignature)
-				infos->signature = *(MidiTimeSignature *)events[i]->data->infos;
-			events[i] = events[i]->next;
+			} else if (events[i]->type == MidiTempoChanged)
+				infos->tempo = *(int *)events[i]->infos;
+			else if (events[i]->type == MidiNewTimeSignature)
+				infos->signature = *(MidiTimeSignature *)events[i]->infos;
+			events[i]++;
 		}
+	}
+	if (debug)
+		printf("\n");
 }
 
 void	updateSounds(sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128], unsigned char volume, double time)

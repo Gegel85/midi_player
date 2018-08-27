@@ -17,35 +17,6 @@ Note	*createNote(unsigned char pitch, unsigned char channel, unsigned long timeB
 	return (note);
 }
 
-bool	addNote(NoteList *list, Note *data)
-{
-	if (!data)
-		return (false);
-	for (; list->next; list = list->next);
-	if (list->note) {
-		list->next = malloc(sizeof(*list->next));
-		if (!list->next) {
-			printf("Error: Cannot alloc %iB\n", (int)sizeof(*list->next));
-			return (false);
-		}
-		list->next->prev = list;
-		list->next->next = NULL;
-		list = list->next;
-	}
-	list->note = data;
-	return (true);
-}
-
-void	deleteNoteList(NoteList *list, bool delData)
-{
-	for (; list->next; list = list->next);
-	for (; list; list = list->prev) {
-		if (delData)
-			free(list->note);
-		free(list->next);
-	}
-}
-
 NoteList	eventsToNotes(MidiParser *result)
 {
 	NoteList	nlist = {NULL, NULL, NULL};
@@ -56,7 +27,7 @@ NoteList	eventsToNotes(MidiParser *result)
 	
 	for (int i = 0; i < 16; i++)
 		memset(notes[i], 0, sizeof(notes[i]));
-	for (int i = 0; i < result->nbOfTracks; i++) {
+	/* for (int i = 0; i < result->nbOfTracks; i++) {
 		currentTime = 0;
 		for (EventList *list = &result->tracks[i].events; list; list = list->next) {
 			if (list->data->type == MidiNoteReleased) {
@@ -82,6 +53,6 @@ NoteList	eventsToNotes(MidiParser *result)
 		for (int j = 0; j < 128; j++)
 			if (notes[i][j])
 				notes[i][j]->duration = currentTime - notes[i][j]->timeBeforeAppear;
-	//sortNoteList();
+	//sortNoteList(); */
 	return (nlist);
 }

@@ -1,12 +1,11 @@
 NAME =	midi_player
 
-SRC = 	display_from_events.c		\
-	display_from_notes.c		\
-	disp_keys.c			\
-	globals.c			\
-	main.c				\
-	sounds.c			\
-	transform_events_to_notes.c	\
+SRC = 	display_from_events.c	\
+	display_from_notes.c	\
+	disp_keys.c		\
+	globals.c		\
+	main.c			\
+	sounds.c		\
 
 OBJ =	$(SRC:%.c=src/%.o)
 
@@ -20,7 +19,8 @@ CSFML = -lcsfml-audio		\
 	-lcsfml-window		\
 
 
-LDFLAGS =			\
+LDFLAGS =	\
+	-lm	\
 
 CFLAGS= $(INC)		\
 	-W		\
