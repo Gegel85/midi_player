@@ -147,7 +147,7 @@ static	Instrument	instrument = PIANO;
 		seconds = sfTime_asSeconds(sfClock_getElapsedTime(clock));
 		sfClock_restart(clock);
 		time = speed * seconds * infos.signature.ticksPerQuarterNote * 128000000 / (infos.tempo ?: 10000000);
-		while (sfRenderWindow_isOpen(window) && sfRenderWindow_pollEvent(window, &event)) {
+		while (sfRenderWindow_pollEvent(window, &event)) {
 			if (event.type == sfEvtClosed) {
 				sfRenderWindow_close(window);
 				isEnd = true;
@@ -159,8 +159,6 @@ static	Instrument	instrument = PIANO;
 					volume++;
 				else if (event.key.code == sfKeyPageDown && volume > 0)
 					volume--;
-				else if (event.key.code == sfKeyA)
-					sfRenderWindow_close(window);
 				else if (event.key.code == sfKeyX)
 					dontDisplay = !dontDisplay;
 				else if (event.key.code == sfKeyM)
@@ -269,13 +267,13 @@ static	Instrument	instrument = PIANO;
 				}
 			}
 		}
-		if (go || !sfRenderWindow_isOpen(window)) {
+		if (go) {
 			elapsedTicks += time;
 			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
 			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, time, volume, begin, result, elapsedTicks);
 		}
 		updateSounds(sounds, notesVolume, fadeSpeed, volume, seconds);
-		if (sfRenderWindow_isOpen(window)) {
+		if (sfRenderWindow_hasFocus(window)) {
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 			if (!dontDisplay) {
 				if (fromEvent)
