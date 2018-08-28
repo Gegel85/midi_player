@@ -202,11 +202,12 @@ void	displayNotes(Event **allevents, double *allticks, char playingNotes[16][128
 	if(debug)printf("\n\n");
 }
 
-void	updateEvents(Event **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128],  bool debug, unsigned int *notes, double time, unsigned char volume)
+void	updateEvents(Event **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128], bool debug, unsigned int *notes, double time, unsigned char volume, int *begin, MidiParser *result, double elapsedTime)
 {
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += time;
 	for (int i = 0; i < nbOfTracks; i++) {
+		for (; elapsedTime > result->tracks[i].notes[begin[i]].timeBeforeAppear + result->tracks[i].notes[begin[i]].duration; begin[i]++);
 		if (debug)
 			printf("%i: Ticks: %.3f, Next event: %p {type = %i, timeToAppear = %i, infos = %p}\n", i, tmp[i], events[i], events[i]->type, events[i]->timeToAppear, events[i]->infos);
 		while ((events[i]->infos || events[i]->type) && events[i]->timeToAppear < tmp[i]) {

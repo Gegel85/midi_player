@@ -91,7 +91,6 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 {
 	Event		*events[result->nbOfTracks];
 	sfEvent		event;
-	NoteList	notes;
 	sfRectangleShape*rect = sfRectangleShape_create();
 	char		playingNotes[16][128];
 	unsigned short	notesVolume[2][128];
@@ -117,6 +116,7 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 	int		nbOfNotesDisplayed = 0;
 static	Instrument	instrument = PIANO;
 	bool		returnValue = true;
+	int		begin[result->nbOfTracks];
 
 	for (int i = 0; i < 2; i++)
 		for (int k = 0; k < 128; k++) {
@@ -127,6 +127,7 @@ static	Instrument	instrument = PIANO;
 		for (int j = 0; j < 128; j++)
 			playingNotes[i][j] = 0;
 	memset(tmp, 0, sizeof(tmp));
+	memset(begin, 0, sizeof(begin));
 	memset(&infos, 0, sizeof(infos));
 	sfRectangleShape_setOutlineColor(rect, (sfColor){0, 0, 0, 255});
 	sfRectangleShape_setOutlineThickness(rect, 2);
@@ -141,6 +142,7 @@ static	Instrument	instrument = PIANO;
 	sfText_setScale(text, (sfVector2f){1, frect.height / 960});
 	clock = sfClock_create();
 	while (!isEnd) {
+		nbOfNotesDisplayed = 0;
 		pressed = false;
 		seconds = sfTime_asSeconds(sfClock_getElapsedTime(clock));
 		sfClock_restart(clock);
@@ -204,21 +206,12 @@ static	Instrument	instrument = PIANO;
 				} else if (!go && event.key.code == sfKeyRight) {
 					elapsedTicks += 100 * speed;
 					pressed = debug;
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, 100, volume);
-					if (!fromEvent)
-						displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
-				} else if (fromEvent && event.key.code == sfKeyW) {
+					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, 100, volume, begin, result, elapsedTicks);
+				} else if (event.key.code == sfKeyW) {
 					displayHUD = !displayHUD;
-					/* sfText_setPosition(text, (sfVector2f){500, 450});
-					sfText_setCharacterSize(text, 20);
-					sfText_setString(text, "Converting midi events");
-					sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
-					sfRenderWindow_drawText(window, text, NULL);
-					sfRenderWindow_display(window);
-					sfText_setCharacterSize(text, 10);
-					notes = eventsToNotes(result);
-					fromEvent = false; */
-				} else if (event.key.code == sfKeyD)
+				} else if (event.key.code == sfKeyL)
+					fromEvent = !fromEvent;
+				else if (event.key.code == sfKeyD)
 					pressed = debug;
 				else if (event.key.code == sfKeyLeft) {
 					elapsedTicks -= 100 * speed;
@@ -270,6 +263,7 @@ static	Instrument	instrument = PIANO;
 					midiClockTicks = 0;
 					for (int i = 0; i < result->nbOfTracks; i++) {
 						tmp[i] = 0;
+						begin[i] = 0;
 						events[i] = result->tracks[i].events;
 					}
 				}
@@ -278,7 +272,7 @@ static	Instrument	instrument = PIANO;
 		if (go || !sfRenderWindow_isOpen(window)) {
 			elapsedTicks += time;
 			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
-			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, time, volume);
+			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, time, volume, begin, result, elapsedTicks);
 		}
 		updateSounds(sounds, notesVolume, fadeSpeed, volume, seconds);
 		if (sfRenderWindow_isOpen(window)) {
@@ -286,8 +280,11 @@ static	Instrument	instrument = PIANO;
 			if (!dontDisplay) {
 				if (fromEvent)
 					displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, &nbOfNotesDisplayed, pressed);
-				else
-					displayNotesFromNotesList(&notes, elapsedTicks, rect, window, debug);
+				else {
+					for (int i = 0; i < result->nbOfTracks; i++) {
+						displayNotesFromNotesList(result->tracks[i].notes, result->tracks[i].nbOfNotes, begin[i], tmp[i], rect, window, debug, &nbOfNotesDisplayed);
+					}
+				}
 			}
 			displayPianoKeys(playingNotes, rect, window);
 			if (displayHUD) {
@@ -371,7 +368,7 @@ int	main(int argc, char **args)
 		printf("- %s\n", args[i]);
 	for (int i = 1 + debug; i < argc; i++) {
 		sfRenderWindow_setTitle(window, args[i]);
-		result = parseMidi(args[i], strcmp(args[1], "ddebug") == 0);
+		result = parseMidi(args[i], strcmp(args[1], "ddebug") == 0, true);
 		if (!result) {
 			printf("An error occurred when reading %s\nExit in 10 seconds\n", args[i]);
 			nanosleep((struct timespec[1]){{10, 0}}, NULL);
