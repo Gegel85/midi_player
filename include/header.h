@@ -16,7 +16,8 @@ Home Key : Go back to the beginning\n\
 U: Change instrument to Piano\n\
 I: Change instrument to Square wave\n\
 O: Change instrument to Sin wave\n\
-P: Change instrument to Sawtooth wave"
+P: Change instrument to Sawtooth wave\n\
+L: Switch back to the old display system"
 
 #include <SFML/Graphics.h>
 #include <SFML/Audio.h>

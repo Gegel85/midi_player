@@ -108,7 +108,7 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 	double		time;
 	static char	volume = 50;
 	sfView		*view = sfView_createFromRect(frect);
-	bool		fromEvent = true;
+	bool		fromEvent = false;
 	bool		dontDisplay = false;
 	float		seconds;
 	double		midiClockTicks = 0;
@@ -280,11 +280,9 @@ static	Instrument	instrument = PIANO;
 			if (!dontDisplay) {
 				if (fromEvent)
 					displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, &nbOfNotesDisplayed, pressed);
-				else {
-					for (int i = 0; i < result->nbOfTracks; i++) {
-						displayNotesFromNotesList(result->tracks[i].notes, result->tracks[i].nbOfNotes, begin[i], tmp[i], rect, window, debug, &nbOfNotesDisplayed);
-					}
-				}
+				else
+					for (int i = 0; i < result->nbOfTracks; i++)
+						displayNotesFromNotesList(result->tracks[i].notes, result->tracks[i].nbOfNotes, begin[i], elapsedTicks, rect, window, debug, &nbOfNotesDisplayed);
 			}
 			displayPianoKeys(playingNotes, rect, window);
 			if (displayHUD) {
