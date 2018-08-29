@@ -207,7 +207,7 @@ void	updateEvents(Event **events, double *tmp, int nbOfTracks, char playingNotes
 	for (int i = 0; i < nbOfTracks; i++)
 		tmp[i] += time;
 	for (int i = 0; i < nbOfTracks; i++) {
-		for (; elapsedTime > result->tracks[i].notes[begin[i]].timeBeforeAppear + result->tracks[i].notes[begin[i]].duration; begin[i]++);
+		for (; begin[i] < result->tracks[i].nbOfNotes && elapsedTime > result->tracks[i].notes[begin[i]].timeBeforeAppear + result->tracks[i].notes[begin[i]].duration; begin[i]++);
 		if (debug)
 			printf("%i: Ticks: %.3f, Next event: %p {type = %i, timeToAppear = %i, infos = %p}\n", i, tmp[i], events[i], events[i]->type, events[i]->timeToAppear, events[i]->infos);
 		while ((events[i]->infos || events[i]->type) && events[i]->timeToAppear < tmp[i]) {

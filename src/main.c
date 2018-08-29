@@ -8,6 +8,50 @@
 #include "midi_parser.h"
 #include "header.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <signal.h>
+char	*strsignal(int signum)
+{
+	switch (signum) {
+	case 2:
+		return ("Interrupted");
+	case 3:
+		return ("Quit");
+	case 4:
+		return ("Illegal hardware instruction");
+	case 6:
+		return ("Aborted");
+	case 7:
+		return ("Bus error");
+	case 8:
+		return ("Floating point exception");
+	case 10:
+		return ("User defined signal 1");
+	case 11:
+		return ("Segmentation fault");
+	case 12:
+		return ("User defined signal 2");
+	case 13:
+		return ("Broken pipe");
+	case 14:
+		return ("Timer expired");
+	case 15:
+		return ("Terminated");
+	default:
+		return ("Unknown signal");
+	}
+}
+
+void	sighandler(int signum)
+{
+	MessageBox(NULL, "Caught fatal signal.\n\nClick OK to close the application", strsignal(signum), 0);
+	exit(EXIT_FAILURE);
+	signal(11, NULL);
+	*(char *)NULL = *(char *)NULL; //Let's do this kernel. Come on, I wait you !
+}
+#endif
+
 char	*getMidiEventTypeString(EventType type)
 {
 	switch (type) {
@@ -334,6 +378,10 @@ int	main(int argc, char **args)
 		printf("Usage: %s [ddebug] <file.mid>\n", args[0]);
 		return (EXIT_FAILURE);
 	}
+	#ifdef _WIN32
+		signal(SIGSEGV, sighandler);
+		signal(SIGABRT, sighandler);
+	#endif
 	window = sfRenderWindow_create(mode, args[0], sfClose | sfResize, NULL);
 	for (int i = strlen(args[0]) - 1; i >= 0; i--)
 		if (args[0][i] == '/' || args[0][i] == '\\') {
