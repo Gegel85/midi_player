@@ -8,9 +8,10 @@
 #include "midi_parser.h"
 #include "header.h"
 
-#ifdef _WIN32
+#if defined _WIN32 || defined __WIN32 || defined __WIN32__
 #include <windows.h>
 #include <signal.h>
+
 char	*strsignal(int signum)
 {
 	switch (signum) {
@@ -133,64 +134,60 @@ bool	noEventsLeft(Event **events, int nbOfTracks)
 
 bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow *window, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], sfText *text)
 {
-	Event		*events[result->nbOfTracks];
 	sfEvent		event;
-	sfRectangleShape*rect = sfRectangleShape_create();
-	char		playingNotes[16][128];
-	unsigned short	notesVolume[2][128];
-	unsigned char	fadeSpeed[2][128];
-	double		elapsedTicks = 0;
-	char		buffer[1000];
-	double		tmp[result->nbOfTracks];
-	MidiInfos	infos;
-	bool		go = !debug;
-	bool		pressed = false;
-	double		speed = (float)result->ticks / 1000;
-	unsigned int	notesPlayed = 0;
 	bool		isEnd = false;
 	sfClock		*clock;
 	double		time;
-	static char	volume = 50;
 	sfView		*view = sfView_createFromRect(frect);
-	bool		fromEvent = false;
-	bool		dontDisplay = false;
 	float		seconds;
-	double		midiClockTicks = 0;
-	bool		displayHUD = true;
-	int		nbOfNotesDisplayed = 0;
-static	Instrument	instrument = PIANO;
 	bool		returnValue = true;
-	int		begin[result->nbOfTracks];
+	struct	data_s	data;
+	char		buffer[1000];
+	int		nbOfNotesDisplayed;
+	exec_state_t	state;
+static	settings_t	settings = {false, true, 50, PIANO, false, 0};
+	
+	memset(&state, 0, sizeof(state));
+	state.bufferedTicks = malloc(result->nbOfTracks * sizeof(*state.bufferedTicks));
+	state.begin = malloc(result->nbOfTracks * sizeof(*state.begin));
+	state.events = malloc(result->nbOfTracks * sizeof(*state.events));
+	if (!state.begin || !state.bufferedTicks || !state.events)
+		exit(EXIT_FAILURE);
+	memset(state.bufferedTicks, 0, sizeof(*state.bufferedTicks));
+	memset(state.begin, 0, sizeof(*state.begin));
+	settings.go = !debug;
+	settings.speed = (float)result->ticks / 1000;
+	state.nbOfTracks = result->nbOfTracks;
+	data.window = window;
+	data.settings = &settings;
+	data.execState = &state;
+	data.parserResult = result;
+	data.rect = sfRectangleShape_create();
+	data.text = text;
+	data.clock = sfClock_create();
+	
+	#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+		HANDLE thread = CreateThread(NULL, 0, ThreadFunc, &data, 0, NULL);
+	#else
+		
+	#endif
 
-	for (int i = 0; i < 2; i++)
-		for (int k = 0; k < 128; k++) {
-			notesVolume[i][k] = 0;
-			fadeSpeed[i][k] = 0;
-		}
-	for (int i = 0; i < 16; i++)
-		for (int j = 0; j < 128; j++)
-			playingNotes[i][j] = 0;
-	memset(tmp, 0, sizeof(tmp));
-	memset(begin, 0, sizeof(begin));
-	memset(&infos, 0, sizeof(infos));
-	sfRectangleShape_setOutlineColor(rect, (sfColor){0, 0, 0, 255});
-	sfRectangleShape_setOutlineThickness(rect, 2);
-	infos.signature.ticksPerQuarterNote = 24;
+	sfRectangleShape_setOutlineColor(data.rect, (sfColor){0, 0, 0, 255});
+	sfRectangleShape_setOutlineThickness(data.rect, 2);
+	state.tempoInfos.signature.ticksPerQuarterNote = 24;
 	for (int i = 0; i < result->nbOfTracks; i++)
-		events[i] = result->tracks[i].events;
-	sfText_setCharacterSize(text, 10);
-	sfText_setPosition(text, (sfVector2f){0, frect.top});
-	sfText_setScale(text, (sfVector2f){1, frect.height / 960});
+		state.events[i] = result->tracks[i].events;
+	sfText_setCharacterSize(data.text, 10);
+	sfText_setPosition(data.text, (sfVector2f){0, frect.top});
+	sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
 	sfRenderWindow_setView(window, view);
-	sfText_setPosition(text, (sfVector2f){0, frect.top});
-	sfText_setScale(text, (sfVector2f){1, frect.height / 960});
+	sfText_setPosition(data.text, (sfVector2f){0, frect.top});
+	sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
 	clock = sfClock_create();
 	while (!isEnd) {
-		nbOfNotesDisplayed = 0;
-		pressed = false;
 		seconds = sfTime_asSeconds(sfClock_getElapsedTime(clock));
 		sfClock_restart(clock);
-		time = speed * seconds * infos.signature.ticksPerQuarterNote * 128000000 / (infos.tempo ?: 10000000);
+		time = settings.speed * seconds * state.tempoInfos.signature.ticksPerQuarterNote * 128000000 / (state.tempoInfos.tempo ?: 10000000);
 		while (sfRenderWindow_pollEvent(window, &event)) {
 			if (event.type == sfEvtClosed) {
 				sfRenderWindow_close(window);
@@ -198,19 +195,19 @@ static	Instrument	instrument = PIANO;
 				returnValue = false;
 			} else if (event.type == sfEvtKeyPressed) {
 				if (event.key.code == sfKeySpace)
-					go = !go;
-				else if (event.key.code == sfKeyPageUp && volume < 100)
-					volume++;
-				else if (event.key.code == sfKeyPageDown && volume > 0)
-					volume--;
+					settings.go = !settings.go;
+				else if (event.key.code == sfKeyPageUp && settings.volume < 100)
+					settings.volume++;
+				else if (event.key.code == sfKeyPageDown && settings.volume > 0)
+					settings.volume--;
 				else if (event.key.code == sfKeyX)
-					dontDisplay = !dontDisplay;
+					settings.dontDisplay = !settings.dontDisplay;
 				else if (event.key.code == sfKeyM)
-					volume = 0;
+					settings.volume = 0;
 				else if (event.key.code == sfKeyS)
 					isEnd = true;
-				else if (event.key.code == sfKeyU && instrument != PIANO) {
-					instrument = PIANO;
+				else if (event.key.code == sfKeyU && settings.instrument != PIANO) {
+					settings.instrument = PIANO;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
@@ -218,8 +215,8 @@ static	Instrument	instrument = PIANO;
 						}
 					loadSounds(progPath, sounds, soundBuffers, debug, PIANO);
 					sfClock_restart(clock);
-				} else if (event.key.code == sfKeyI && instrument != SQUARE) {
-					instrument = SQUARE;
+				} else if (event.key.code == sfKeyI && settings.instrument != SQUARE) {
+					settings.instrument = SQUARE;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
@@ -227,8 +224,8 @@ static	Instrument	instrument = PIANO;
 						}
 					loadSounds(progPath, sounds, soundBuffers, debug, SQUARE);
 					sfClock_restart(clock);
-				} else if (event.key.code == sfKeyO && instrument != SINUSOIDE) {
-					instrument = SINUSOIDE;
+				} else if (event.key.code == sfKeyO && settings.instrument != SINUSOIDE) {
+					settings.instrument = SINUSOIDE;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
@@ -236,8 +233,8 @@ static	Instrument	instrument = PIANO;
 						}
 					loadSounds(progPath, sounds, soundBuffers, debug, SINUSOIDE);
 					sfClock_restart(clock);
-				} else if (event.key.code == sfKeyP && instrument != SAWTOOTH) {
-					instrument = SAWTOOTH;
+				} else if (event.key.code == sfKeyP && settings.instrument != SAWTOOTH) {
+					settings.instrument = SAWTOOTH;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
@@ -245,120 +242,117 @@ static	Instrument	instrument = PIANO;
 						}
 					loadSounds(progPath, sounds, soundBuffers, debug, SAWTOOTH);
 					sfClock_restart(clock);
-				} else if (!go && event.key.code == sfKeyRight) {
-					elapsedTicks += 100 * speed;
-					pressed = debug;
-					updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, 100, volume, begin, result, elapsedTicks);
-				} else if (event.key.code == sfKeyW) {
-					displayHUD = !displayHUD;
-				} else if (event.key.code == sfKeyL)
-					fromEvent = !fromEvent;
-				else if (event.key.code == sfKeyD)
-					pressed = debug;
+				} else if (!settings.go && event.key.code == sfKeyRight) {
+					state.elapsedTicks += 100 * settings.speed;
+					updateEvents(&state, sounds, debug, 100, settings.volume, result);
+				} else if (event.key.code == sfKeyW)
+					settings.displayHUD = !settings.displayHUD;
 				else if (event.key.code == sfKeyLeft) {
-					elapsedTicks -= 100 * speed;
+					state.elapsedTicks -= 100 * settings.speed;
 					for (int i = 0; i < 16; i++)
 						for (int j = 0; j < 128; j++)
-							playingNotes[i][j] = 0;
-					pressed = debug;
+							state.playingNotes[i][j] = 0;
 					for (int i = 0; i < result->nbOfTracks; i++) {
-						tmp[i] = elapsedTicks - 100;
-						events[i] = result->tracks[i].events;
+						state.bufferedTicks[i] = state.elapsedTicks - 100;
+						state.events[i] = result->tracks[i].events;
 					}
-					notesPlayed = 0;
-					for (int i = 0; fromEvent && i < result->nbOfTracks; i++)
-						while ((events[i]->infos || events[i]->type) && events[i]->timeToAppear < tmp[i]) {
-							tmp[i] -= events[i]->timeToAppear;
-							if (events[i]->type == MidiNotePressed) {
-								notesPlayed++;
-								playingNotes[((MidiNote *)events[i]->infos)->channel][((MidiNote *)events[i]->infos)->pitch] = ((MidiNote *)events[i]->infos)->velocity;
-							} else if (events[i]->type == MidiNoteReleased)
-								playingNotes[((MidiNote *)events[i]->infos)->channel][((MidiNote *)events[i]->infos)->pitch] = 0;
-							events[i]++;
+					state.notesPlayed = 0;
+					for (int i = 0; i < result->nbOfTracks; i++)
+						while ((state.events[i]->infos || state.events[i]->type) && state.events[i]->timeToAppear < state.bufferedTicks[i]) {
+							state.bufferedTicks[i] -= state.events[i]->timeToAppear;
+							if (state.events[i]->type == MidiNotePressed) {
+								state.notesPlayed++;
+								state.playingNotes[((MidiNote *)state.events[i]->infos)->channel][((MidiNote *)state.events[i]->infos)->pitch] = ((MidiNote *)state.events[i]->infos)->velocity;
+							} else if (state.events[i]->type == MidiNoteReleased)
+								state.playingNotes[((MidiNote *)state.events[i]->infos)->channel][((MidiNote *)state.events[i]->infos)->pitch] = 0;
+							state.events[i]++;
 						}
 				} else if (event.key.code == sfKeyUp)
-					speed += 0.02;
+					settings.speed += 0.02;
 				else if (event.key.code == sfKeyDown)
-					speed -= 0.02;
+					settings.speed -= 0.02;
 				else if (event.key.code == sfKeyAdd) {
 					frect.height /= 1.1;
 					frect.top = 960 - frect.height;
 					sfView_reset(view, frect);
-					sfRectangleShape_setOutlineThickness(rect, frect.height / 960 > 1 ? 2 : frect.height / 960 * 2);
+					sfRectangleShape_setOutlineThickness(data.rect, frect.height / 960 > 1 ? 2 : frect.height / 960 * 2);
 					sfRenderWindow_setView(window, view);
-					sfText_setPosition(text, (sfVector2f){0, frect.top});
-					sfText_setScale(text, (sfVector2f){1, frect.height / 960});
+					sfText_setPosition(data.text, (sfVector2f){0, frect.top});
+					sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
 				} else if (event.key.code == sfKeySubtract) {
 					frect.height *= 1.1;
 					frect.top = 960 - frect.height;
 					sfView_reset(view, frect);
-					sfRectangleShape_setOutlineThickness(rect, frect.height / 960 > 1 ? 2 : frect.height / 960 * 2);
+					sfRectangleShape_setOutlineThickness(data.rect, frect.height / 960 > 1 ? 2 : frect.height / 960 * 2);
 					sfRenderWindow_setView(window, view);
-					sfText_setPosition(text, (sfVector2f){0, frect.top});
-					sfText_setScale(text, (sfVector2f){1, frect.height / 960});
+					sfText_setPosition(data.text, (sfVector2f){0, frect.top});
+					sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
 				} else if (event.key.code == sfKeyHome) {
 					for (int i = 0; i < 16; i++)
-						memset(playingNotes[i], 0, sizeof(playingNotes[i]));
-					pressed = debug;
-					elapsedTicks = 0;
-					notesPlayed = 0;
-					midiClockTicks = 0;
+						memset(state.playingNotes[i], 0, sizeof(state.playingNotes[i]));
+					state.elapsedTicks = 0;
+					state.notesPlayed = 0;
+					state.midiClockTicks = 0;
 					for (int i = 0; i < result->nbOfTracks; i++) {
-						tmp[i] = 0;
-						begin[i] = 0;
-						events[i] = result->tracks[i].events;
+						state.bufferedTicks[i] = 0;
+						state.begin[i] = 0;
+						state.events[i] = result->tracks[i].events;
 					}
 				}
 			}
 		}
-		if (go) {
-			elapsedTicks += time;
-			midiClockTicks += 128 * infos.signature.ticksPerQuarterNote * seconds;
-			updateEvents(events, tmp, result->nbOfTracks, playingNotes, &infos, sounds, notesVolume, fadeSpeed, debug, &notesPlayed, time, volume, begin, result, elapsedTicks);
+		if (settings.go) {
+			state.elapsedTicks += time;
+			state.midiClockTicks += 128 * state.tempoInfos.signature.ticksPerQuarterNote * seconds;
+			updateEvents(&state, sounds, debug, time, settings.volume, result);
 		}
-		updateSounds(sounds, notesVolume, fadeSpeed, volume, seconds);
+		updateSounds(sounds, &state, settings.volume, time);
 		if (sfRenderWindow_hasFocus(window)) {
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
-			if (!dontDisplay) {
-				if (fromEvent)
-					displayNotes(events, tmp, playingNotes, result->nbOfTracks, window, rect, &nbOfNotesDisplayed, pressed);
-				else
-					for (int i = 0; i < result->nbOfTracks; i++)
-						displayNotesFromNotesList(result->tracks[i].notes, result->tracks[i].nbOfNotes, begin[i], elapsedTicks, rect, window, debug, &nbOfNotesDisplayed);
+			if (!settings.dontDisplay) {
+				for (int i = 0; i < result->nbOfTracks; i++)
+					displayNotesFromNotesList(&result->tracks[i], state.begin[i], &state, data.rect, window, debug, &nbOfNotesDisplayed);
 			}
-			displayPianoKeys(playingNotes, rect, window);
-			if (displayHUD) {
+			displayPianoKeys(state.playingNotes, data.rect, window);
+			if (settings.displayHUD) {
 				sprintf(buffer,
 					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\nCurrent instrument: %s\n\n\nControls:%s\n",
 					1 / seconds,
-					elapsedTicks,
-					midiClockTicks,
-					speed,
-					infos.tempo,
-					infos.signature.ticksPerQuarterNote * 128,
+					state.elapsedTicks,
+					state.midiClockTicks,
+					settings.speed,
+					state.tempoInfos.tempo,
+					state.tempoInfos.signature.ticksPerQuarterNote * 128,
 					nbOfNotesDisplayed,
-					notesPlayed,
+					state.notesPlayed,
 					result->nbOfNotes,
 					960 * 100 / frect.height,
-					volume,
-					instrument == PIANO ? "Piano" :
-					instrument == SQUARE ? "Square wave" :
-					instrument == SINUSOIDE ? "Sin wave" :
-					instrument == SAWTOOTH ? "Sawtooth wave" : "Error",
+					settings.volume,
+					settings.instrument == PIANO ? "Piano" :
+					settings.instrument == SQUARE ? "Square wave" :
+					settings.instrument == SINUSOIDE ? "Sin wave" :
+					settings.instrument == SAWTOOTH ? "Sawtooth wave" : "Error",
 					CONTROLS
 				);
-				sfText_setString(text, buffer);
+				sfText_setString(data.text, buffer);
 				sfRenderWindow_drawText(window, text, NULL);
 			}
 			sfRenderWindow_display(window);
 		} else
-			nanosleep((struct timespec[1]){{0, 16666667}}, NULL);
-		if (!debug && noEventsLeft(events, result->nbOfTracks))
+			nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
+		if (!debug && noEventsLeft(state.events, result->nbOfTracks))
 			isEnd = true;
         }
 	sfClock_destroy(clock);
-	sfRectangleShape_destroy(rect);
+	sfClock_destroy(data.clock);
+	sfText_destroy(data.text);
+	sfRectangleShape_destroy(data.rect);
 	sfView_destroy(view);
+	#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+		CloseHandle(thread);
+	#else
+		
+	#endif
 	return (returnValue);
 }
 

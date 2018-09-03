@@ -39,15 +39,55 @@ typedef enum {
 	SAWTOOTH,
 } Instrument;
 
+typedef struct {
+	bool		dontDisplay;
+	bool		displayHUD;
+	char		volume;
+	Instrument	instrument;
+	bool		go;
+	double		speed;
+} settings_t;
+
+typedef struct {
+	char		playingNotes[16][128];
+	unsigned short	notesVolume[2][128];
+	unsigned char	fadeSpeed[2][128];
+	double		elapsedTicks;
+	unsigned int	nbOfTracks;
+	double		*bufferedTicks;
+	Event		**events;
+	MidiInfos	tempoInfos;
+	double		midiClockTicks;
+	unsigned int	notesPlayed;
+	int		*begin;
+} exec_state_t;
+
+struct data_s {
+	sfRenderWindow	*window;
+	settings_t	*settings;
+	exec_state_t	*execState;
+	MidiParser	*parserResult;
+	sfRectangleShape*rect;
+	sfText		*text;
+	bool		debug;
+	sfClock		*clock;
+};
+
 extern sfFloatRect	frect;
 
+#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+#include <windows.h>
+
+DWORD WINAPI ThreadFunc(void *args);
+#else
+
+#endif
 char	*getEventString(Event *event);
 char	*getMidiEventTypeString(EventType type);
 NoteList	eventsToNotes(MidiParser *result);
 void	displayPianoKeys(char playingNotes[16][128], sfRectangleShape *rec, sfRenderWindow *win);
+void	updateSounds(sfSound *sounds[2][128], exec_state_t *state, unsigned char volume, double time);
 void	loadSounds(char *path, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument);
-void	updateSounds(sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128], unsigned char volume, double time);
+void	updateEvents(exec_state_t *state, sfSound *sounds[2][128], bool debug, double time, unsigned char volume, MidiParser *result);
 void	displayNote(unsigned char channel, unsigned char pitch, double startTime, double currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug);
-void	displayNotesFromNotesList(Note *notes, int nbOfNotes, int begin, double elapsedTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);
-void	displayNotes(Event **allevents, double *allticks, char playingNotes[16][128], int nbOfTracks, sfRenderWindow *win, sfRectangleShape *rec, int *nbOfNoteDisplayed, bool debug);
-void	updateEvents(Event **events, double *tmp, int nbOfTracks, char playingNotes[16][128], MidiInfos *infos, sfSound *sounds[2][128], unsigned short notesVolume[2][128], unsigned char fadeSpeed[2][128], bool debug, unsigned int *notes, double time, unsigned char volume, int *begin, MidiParser *result, double elapsedTime);
+void	displayNotesFromNotesList(Track *track, int begin, exec_state_t *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);

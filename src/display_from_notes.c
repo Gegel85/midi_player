@@ -1,10 +1,18 @@
 #include <stdbool.h>
 #include "header.h"
 
-void	displayNotesFromNotesList(Note *notes, int nbOfNotes, int begin, double elapsedTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed)
+void	displayNotesFromNotesList(Track *track, int begin, exec_state_t *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed)
 {
-	for (int i = begin; i < nbOfNotes && notes[i].timeBeforeAppear - elapsedTime < frect.height + 100; i++) {
+	for (int i = begin; i < track->nbOfNotes && track->notes[i].timeBeforeAppear - state->elapsedTicks < frect.height + 100; i++) {
 		(*nbOfNotesDisplayed)++;
-		displayNote(notes[i].channel, notes[i].pitch, notes[i].timeBeforeAppear - elapsedTime, notes[i].duration + notes[i].timeBeforeAppear - elapsedTime, rec, win, debug);
+		displayNote(
+			track->notes[i].channel,
+			track->notes[i].pitch,
+			track->notes[i].timeBeforeAppear - state->elapsedTicks,
+			track->notes[i].duration + track->notes[i].timeBeforeAppear - state->elapsedTicks,
+			rec,
+			win,
+			debug
+		);
 	}
 }
