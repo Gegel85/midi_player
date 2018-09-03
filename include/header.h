@@ -69,6 +69,7 @@ struct data_s {
 	MidiParser	*parserResult;
 	sfRectangleShape*rect;
 	sfText		*text;
+	sfView		*view;
 	bool		debug;
 	sfClock		*clock;
 };
