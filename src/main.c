@@ -411,11 +411,11 @@ int	main(int argc, char **args)
 	for (int i = 1 + debug; i < argc; i++)
 		printf("- %s\n", args[i]);
 	for (int i = 1 + debug; i < argc; i++) {
+		printf("Reading file '%s'\n", args[i]);
 		sfRenderWindow_setTitle(window, args[i]);
 		result = parseMidi(args[i], strcmp(args[1], "ddebug") == 0, true);
 		if (!result) {
-			printf("An error occurred when reading %s\nExit in 10 seconds\n", args[i]);
-			nanosleep((struct timespec[1]){{10, 0}}, NULL);
+			printf("An error occurred when reading %s\n", args[i]);
 		} else {
 			printf("Finished to read %s: format %hi, %hi tracks, %i notes, ", args[i], result->format, result->nbOfTracks, result->nbOfNotes);
 			if (result->fps) {
