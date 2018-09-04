@@ -134,6 +134,8 @@ void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, 
 {
 	for (int i = 0; i < 2; i++)
 		for (int j = 0; j < 128; j++) {
+			if (!sounds[i][j])
+				break;
 			if (state->notesVolume[i][j] >= state->fadeSpeed[i][j] * time * 516)
 				state->notesVolume[i][j] -= state->fadeSpeed[i][j] * time * 516;
 			else
@@ -161,6 +163,9 @@ void	ThreadFunc(void *args)
 			updateEvents(data->execState, data->sounds, data->debug, time, data->settings->volume, data->parserResult);
 		}
 		updateSounds(data->sounds, data->execState, data->settings->volume, seconds);
-		nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
+		while (data->loading) {
+			sfClock_restart(data->clock);
+			nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
+		}
 	}
 }

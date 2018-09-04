@@ -206,36 +206,52 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
+							sounds[i][j] = NULL;
 							sfSoundBuffer_destroy(soundBuffers[i][j]);
+							soundBuffers[i][j] = NULL;
 						}
+					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, PIANO);
+					data.loading = false;
 					sfClock_restart(data.clock);
 				} else if (event.key.code == sfKeyI && settings.instrument != SQUARE) {
 					settings.instrument = SQUARE;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
+							sounds[i][j] = NULL;
 							sfSoundBuffer_destroy(soundBuffers[i][j]);
+							soundBuffers[i][j] = NULL;
 						}
+					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, SQUARE);
+					data.loading = false;
 					sfClock_restart(clock);
 				} else if (event.key.code == sfKeyO && settings.instrument != SINUSOIDE) {
 					settings.instrument = SINUSOIDE;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
+							sounds[i][j] = NULL;
 							sfSoundBuffer_destroy(soundBuffers[i][j]);
+							soundBuffers[i][j] = NULL;
 						}
+					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, SINUSOIDE);
+					data.loading = false;
 					sfClock_restart(clock);
 				} else if (event.key.code == sfKeyP && settings.instrument != SAWTOOTH) {
 					settings.instrument = SAWTOOTH;
 					for (int i = 0; i < 2; i++)
 						for (int j = 0; j < 128; j++) {
 							sfSound_destroy(sounds[i][j]);
+							sounds[i][j] = NULL;
 							sfSoundBuffer_destroy(soundBuffers[i][j]);
+							soundBuffers[i][j] = NULL;
 						}
+					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, SAWTOOTH);
+					data.loading = false;
 					sfClock_restart(clock);
 				} else if (!settings.go && event.key.code == sfKeyRight) {
 					state.elapsedTicks += 100 * settings.speed;

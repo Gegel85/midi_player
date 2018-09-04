@@ -70,6 +70,7 @@ struct data_s {
 	sfText		*text;
 	sfView		*view;
 	bool		debug;
+	bool		loading;
 	bool		leave;
 	sfSound		***sounds;
 	sfClock		*clock;
