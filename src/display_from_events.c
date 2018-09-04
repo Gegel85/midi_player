@@ -79,7 +79,7 @@ void	displayNote(unsigned char channel, unsigned char pitch, double startTime, d
 	}
 }
 
-void	updateEvents(exec_state_t *state, sfSound *sounds[2][128], bool debug, double time, unsigned char volume, MidiParser *result)
+void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result)
 {
 	for (unsigned int i = 0; i < state->nbOfTracks; i++)
 		state->bufferedTicks[i] += time;
@@ -130,7 +130,7 @@ void	updateEvents(exec_state_t *state, sfSound *sounds[2][128], bool debug, doub
 		printf("\n");
 }
 
-void	updateSounds(sfSound *sounds[2][128], exec_state_t *state, unsigned char volume, double time)
+void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, double time)
 {
 	for (int i = 0; i < 2; i++)
 		for (int j = 0; j < 128; j++) {
@@ -145,174 +145,22 @@ void	updateSounds(sfSound *sounds[2][128], exec_state_t *state, unsigned char vo
 		}
 }
 
-#if defined _WIN32 || defined __WIN32 || defined __WIN32__
-#include <windows.h>
-
-DWORD WINAPI ThreadFunc(void *args)
+void	ThreadFunc(void *args)
 {
 	struct	data_s	*data = args;
-	char		buffer[1000];
-	int		nbOfNotesDisplayed = 0;
 	float		seconds;
-	sfView		*view = sfView_createFromRect(frect);
-	sfVideoMode	mode = {1280, 960, 32};
-	sfEvent		event;
-	
-	data->window = sfRenderWindow_create(mode, "Midi player", sfClose | sfResize, NULL);
-	sfRenderWindow_setView(data->window, view);
-	sfClock_restart(data->clock);
-	while (true) {
-		nbOfNotesDisplayed = 0;
-		while (sfRenderWindow_pollEvent(data->window, &event)) {
-			if (event.type == sfEvtClosed) {
-				sfRenderWindow_close(data->window);
-				return (0);
-			} /* else if (event.type == sfEvtKeyPressed) {
-				if (event.key.code == sfKeySpace)
-					data->settings->go = !data->settings->go;
-				else if (event.key.code == sfKeyPageUp && data->settings->volume < 100)
-					data->settings->volume++;
-				else if (event.key.code == sfKeyPageDown && data->settings->volume > 0)
-					data->settings->volume--;
-				else if (event.key.code == sfKeyX)
-					data->settings->dontDisplay = !data->settings->dontDisplay;
-				else if (event.key.code == sfKeyM)
-					data->settings->volume = 0;
-				else if (event.key.code == sfKeyS)
-					isEnd = true;
-				else if (event.key.code == sfKeyU && data->settings->instrument != PIANO) {
-					data->settings->instrument = PIANO;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-						}
-					loadSounds(progPath, sounds, soundBuffers, debug, PIANO);
-					sfClock_restart(data.clock);
-				} else if (event.key.code == sfKeyI && data->settings->instrument != SQUARE) {
-					data->settings->instrument = SQUARE;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-						}
-					loadSounds(progPath, sounds, soundBuffers, debug, SQUARE);
-					sfClock_restart(clock);
-				} else if (event.key.code == sfKeyO && data->settings->instrument != SINUSOIDE) {
-					data->settings->instrument = SINUSOIDE;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-						}
-					loadSounds(progPath, sounds, soundBuffers, debug, SINUSOIDE);
-					sfClock_restart(clock);
-				} else if (event.key.code == sfKeyP && data->settings->instrument != SAWTOOTH) {
-					data->settings->instrument = SAWTOOTH;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-						}
-					loadSounds(progPath, sounds, soundBuffers, debug, SAWTOOTH);
-					sfClock_restart(clock);
-				} else if (!data->settings->go && event.key.code == sfKeyRight) {
-					state.elapsedTicks += 100 * data->settings->speed;
-					updateEvents(&state, sounds, debug, 100, data->settings->volume, result);
-				} else if (event.key.code == sfKeyW)
-					data->settings->displayHUD = !data->settings->displayHUD;
-				else if (event.key.code == sfKeyLeft) {
-					state.elapsedTicks -= 100 * data->settings->speed;
-					for (int i = 0; i < 16; i++)
-						for (int j = 0; j < 128; j++)
-							state.playingNotes[i][j] = 0;
-					for (int i = 0; i < result->nbOfTracks; i++) {
-						state.bufferedTicks[i] = state.elapsedTicks - 100;
-						state.events[i] = result->tracks[i].events;
-					}
-					state.notesPlayed = 0;
-					for (int i = 0; i < result->nbOfTracks; i++)
-						while ((state.events[i]->infos || state.events[i]->type) && state.events[i]->timeToAppear < state.bufferedTicks[i]) {
-							state.bufferedTicks[i] -= state.events[i]->timeToAppear;
-							if (state.events[i]->type == MidiNotePressed) {
-								state.notesPlayed++;
-								state.playingNotes[((MidiNote *)state.events[i]->infos)->channel][((MidiNote *)state.events[i]->infos)->pitch] = ((MidiNote *)state.events[i]->infos)->velocity;
-							} else if (state.events[i]->type == MidiNoteReleased)
-								state.playingNotes[((MidiNote *)state.events[i]->infos)->channel][((MidiNote *)state.events[i]->infos)->pitch] = 0;
-							state.events[i]++;
-						}
-				} else if (event.key.code == sfKeyUp)
-					data->settings->speed += 0.02;
-				else if (event.key.code == sfKeyDown)
-					data->settings->speed -= 0.02;
-				else if (event.key.code == sfKeyAdd) {
-					frect.height /= 1.1;
-					frect.top = 960 - frect.height;
-					sfView_reset(view, frect);
-					sfRectangleShape_setOutlineThickness(data.rect, frect.height / 960 > 1 ? 2 : frect.height / 960 * 2);
-					sfRenderWindow_setView(window, view);
-					sfText_setPosition(data.text, (sfVector2f){0, frect.top});
-					sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
-				} else if (event.key.code == sfKeySubtract) {
-					frect.height *= 1.1;
-					frect.top = 960 - frect.height;
-					sfView_reset(view, frect);
-					sfRectangleShape_setOutlineThickness(data.rect, frect.height / 960 > 1 ? 2 : frect.height / 960 * 2);
-					sfRenderWindow_setView(window, view);
-					sfText_setPosition(data.text, (sfVector2f){0, frect.top});
-					sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
-				} else if (event.key.code == sfKeyHome) {
-					for (int i = 0; i < 16; i++)
-						memset(state.playingNotes[i], 0, sizeof(state.playingNotes[i]));
-					state.elapsedTicks = 0;
-					state.notesPlayed = 0;
-					state.midiClockTicks = 0;
-					for (int i = 0; i < result->nbOfTracks; i++) {
-						state.bufferedTicks[i] = 0;
-						state.begin[i] = 0;
-						state.events[i] = result->tracks[i].events;
-					}
-				}
-			} */
+	double		time;
+
+	while (!data->leave && (data->debug || !noEventsLeft(data->execState->events, data->parserResult->nbOfTracks))) {
+		seconds = sfTime_asSeconds(sfClock_getElapsedTime(data->clock));
+		sfClock_restart(data->clock);
+		time = data->settings->speed * seconds * data->execState->tempoInfos.signature.ticksPerQuarterNote * 128000000 / (data->execState->tempoInfos.tempo ?: 10000000);
+		if (data->settings->go) {
+			data->execState->elapsedTicks += time;
+			data->execState->midiClockTicks += 128 * data->execState->tempoInfos.signature.ticksPerQuarterNote * seconds;
+			updateEvents(data->execState, data->sounds, data->debug, time, data->settings->volume, data->parserResult);
 		}
-		if (sfRenderWindow_hasFocus(data->window)) {
-			seconds = sfTime_asSeconds(sfClock_getElapsedTime(data->clock));
-			sfRenderWindow_clear(data->window, (sfColor){50, 155, 155, 255});
-			if (!data->settings->dontDisplay) {
-				for (int i = 0; i < data->parserResult->nbOfTracks; i++)
-					displayNotesFromNotesList(&data->parserResult->tracks[i], data->execState->begin[i], data->execState, data->rect, data->window, data->debug, &nbOfNotesDisplayed);
-			}
-			displayPianoKeys(data->execState->playingNotes, data->rect, data->window);
-			if (data->settings->displayHUD) {
-				sprintf(buffer,
-					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\nCurrent instrument: %s\n\n\nControls:%s\n",
-					1 / seconds,
-					data->execState->elapsedTicks,
-					data->execState->midiClockTicks,
-					data->settings->speed,
-					data->execState->tempoInfos.tempo,
-					data->execState->tempoInfos.signature.ticksPerQuarterNote * 128,
-					nbOfNotesDisplayed,
-					data->execState->notesPlayed,
-					data->parserResult->nbOfNotes,
-					960 * 100 / frect.height,
-					data->settings->volume,
-					data->settings->instrument == PIANO ? "Piano" :
-					data->settings->instrument == SQUARE ? "Square wave" :
-					data->settings->instrument == SINUSOIDE ? "Sin wave" :
-					data->settings->instrument == SAWTOOTH ? "Sawtooth wave" : "Error",
-					CONTROLS
-				);
-				sfText_setString(data->text, buffer);
-				sfRenderWindow_drawText(data->window, data->text, NULL);
-			}
-			sfClock_restart(data->clock);
-			sfRenderWindow_display(data->window);
-		} else
-			nanosleep((struct timespec[1]){{0, 16666667}}, NULL);
+		updateSounds(data->sounds, data->execState, data->settings->volume, seconds);
+		nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
 	}
-	return 0;
 }
-#else
-	
-#endif

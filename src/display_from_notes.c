@@ -3,7 +3,7 @@
 
 void	displayNotesFromNotesList(Track *track, int begin, exec_state_t *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed)
 {
-	for (int i = begin; i < track->nbOfNotes && track->notes[i].timeBeforeAppear - state->elapsedTicks < frect.height + 100; i++) {
+	for (int i = begin; i < track->nbOfNotes && track->notes[i].timeBeforeAppear - state->elapsedTicks < frect.height; i++) {
 		(*nbOfNotesDisplayed)++;
 		displayNote(
 			track->notes[i].channel,

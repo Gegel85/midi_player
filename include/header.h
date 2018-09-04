@@ -16,8 +16,7 @@ Home Key : Go back to the beginning\n\
 U: Change instrument to Piano\n\
 I: Change instrument to Square wave\n\
 O: Change instrument to Sin wave\n\
-P: Change instrument to Sawtooth wave\n\
-L: Switch back to the old display system"
+P: Change instrument to Sawtooth wave"
 
 #include <SFML/Graphics.h>
 #include <SFML/Audio.h>
@@ -71,24 +70,21 @@ struct data_s {
 	sfText		*text;
 	sfView		*view;
 	bool		debug;
+	bool		leave;
+	sfSound		***sounds;
 	sfClock		*clock;
 };
 
 extern sfFloatRect	frect;
 
-#if defined _WIN32 || defined __WIN32 || defined __WIN32__
-#include <windows.h>
-
-DWORD WINAPI ThreadFunc(void *args);
-#else
-
-#endif
+void	ThreadFunc(void *args);
 char	*getEventString(Event *event);
 char	*getMidiEventTypeString(EventType type);
 NoteList	eventsToNotes(MidiParser *result);
+bool    noEventsLeft(Event **events, int nbOfTracks);
 void	displayPianoKeys(char playingNotes[16][128], sfRectangleShape *rec, sfRenderWindow *win);
-void	updateSounds(sfSound *sounds[2][128], exec_state_t *state, unsigned char volume, double time);
-void	loadSounds(char *path, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument);
-void	updateEvents(exec_state_t *state, sfSound *sounds[2][128], bool debug, double time, unsigned char volume, MidiParser *result);
+void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, double time);
+void	loadSounds(char *path, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument);
+void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result);
 void	displayNote(unsigned char channel, unsigned char pitch, double startTime, double currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug);
 void	displayNotesFromNotesList(Track *track, int begin, exec_state_t *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);

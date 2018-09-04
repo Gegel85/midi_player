@@ -51,7 +51,7 @@ sfInt16	*createSawtoothSample(double frequency)
 	return (raw);
 }
 
-void	loadSounds(char *path, sfSound *sounds[2][128], sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument)
+void	loadSounds(char *path, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument)
 {
 	char		buffer[1024];
 	char		*note;
