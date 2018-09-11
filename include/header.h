@@ -20,6 +20,7 @@ P: Change instrument to Sawtooth wave"
 
 #include <SFML/Graphics.h>
 #include <SFML/Audio.h>
+#include <sys/stat.h>
 #include <stdbool.h>
 #include "midi_parser.h"
 
@@ -76,10 +77,31 @@ struct data_s {
 	sfClock		*clock;
 };
 
-extern sfFloatRect	frect;
+typedef struct {
+	sfSprite	*sprite;
+	sfTexture	*texture;
+	char		*path;
+	char		**extensions;
+	int		nbOfExtensions;
+} Sprite;
+
+typedef struct {
+	char		*name;
+	struct stat	stats;
+	bool		isEnd;
+} FileInfos;
+
+typedef struct {
+	char	*path;
+	char	*extension;
+} Sprite_config;
+
+extern		sfFloatRect	frect;
+extern	const	Sprite_config	configs[];
 
 void	ThreadFunc(void *args);
 char	*getEventString(Event *event);
+int	dispMsg(char *title, char *content, int variate);
 char	*getMidiEventTypeString(EventType type);
 NoteList	eventsToNotes(MidiParser *result);
 bool    noEventsLeft(Event **events, int nbOfTracks);

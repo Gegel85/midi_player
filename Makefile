@@ -6,11 +6,13 @@ SRC = 	display_from_events.c	\
 	globals.c		\
 	main.c			\
 	sounds.c		\
+	disp_msg.c		\
 
 OBJ =	$(SRC:%.c=src/%.o)
 
 INC =	-Iinclude			\
 	-Ilib/midi_parser/include	\
+	-Ilib/concatf/include		\
 
 CSFML = -lcsfml-audio		\
 	-lcsfml-graphics	\
@@ -19,8 +21,11 @@ CSFML = -lcsfml-audio		\
 	-lcsfml-window		\
 
 
-LDFLAGS =		\
-	-lm		\
+LDFLAGS =				\
+	-lm				\
+	-Llib/concatf			\
+	lib/midi_parser/midiparser.a	\
+	-lconcatf			\
 
 CFLAGS= $(INC)		\
 	-W		\
@@ -38,9 +43,11 @@ all:	$(LIBS) $(NAME)
 lib/midi_parser/midiparser.a:
 	$(MAKE) -C lib/midi_parser $(RULE)
 
+lib/concatf/concatf.a:
+	$(MAKE) -C lib/midi_parser $(RULE)
 
 $(NAME):$(OBJ)
-	$(CC) -o $(NAME) $(OBJ) $(LDFLAGS) $(CSFML) $(LIBS)
+	$(CC) -o $(NAME) $(OBJ) $(LDFLAGS) $(CSFML)
 
 clean:
 	$(MAKE) -C lib/midi_parser clean
