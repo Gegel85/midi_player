@@ -58,6 +58,12 @@ void	sighandler(int signum)
 	signal(11, NULL);
 	*(char *)NULL = *(char *)NULL; //Let's do this kernel. Come on, I wait you !
 }
+
+char	*realpath(char *path, char *buffer)
+{
+	GetFullPathNameA(path, MAX_PATH, buffer, NULL);
+	return (buffer);
+}
 #endif
 
 int	my_strcmp(char *str1, char *str2)
