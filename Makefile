@@ -37,6 +37,7 @@ CC =	gcc
 RULE =	all
 
 LIBS =	lib/midi_parser/midiparser.a	\
+	lib/concatf/concatf.a		\
 
 all:	$(LIBS) $(NAME)
 
@@ -44,7 +45,7 @@ lib/midi_parser/midiparser.a:
 	$(MAKE) -C lib/midi_parser $(RULE)
 
 lib/concatf/concatf.a:
-	$(MAKE) -C lib/midi_parser $(RULE)
+	$(MAKE) -C lib/concatf $(RULE)
 
 $(NAME):$(OBJ)
 	$(CC) -o $(NAME) $(OBJ) $(LDFLAGS) $(CSFML)
