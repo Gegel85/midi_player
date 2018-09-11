@@ -312,7 +312,7 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 				}
 			}
 		}
-		if (sfRenderWindow_hasFocus(window)) {
+		//if (sfRenderWindow_hasFocus(window)) {
 		        nbOfNotesDisplayed = 0;
 			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 			if (!settings.dontDisplay) {
@@ -344,8 +344,8 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 				sfRenderWindow_drawText(window, text, NULL);
 			}
 			sfRenderWindow_display(window);
-		} else
-			nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
+		//} else
+		//	nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
 		if (!debug && noEventsLeft(state.events, result->nbOfTracks))
 			isEnd = true;
         }
