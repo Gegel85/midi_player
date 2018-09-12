@@ -53,3 +53,6 @@ dkms.conf
 
 # Midi files
 *.mid
+
+# Saved path file
+lastPath
