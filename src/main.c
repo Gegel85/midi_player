@@ -8,6 +8,8 @@
 #include <time.h>
 #include <dirent.h>
 #include <limits.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <ctype.h>
@@ -587,6 +589,22 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 						if (start + 14 <= selected)
 							start = selected - 14;
 					}
+				} else if (event.key.code == sfKeyPageUp) {
+					if (selected <= 15) {
+						selected = 0;
+						start = 0;
+					} else {
+						selected -= 15;
+						start = selected;
+					}
+				} else if (event.key.code == sfKeyPageDown) {
+					if (selected >= len - 15) {
+						selected = len - 1;
+						start = len - 15;
+					} else {
+						selected += 15;
+						start = selected - 14;
+					}
 				} else if (event.key.code == sfKeySpace) {
 					isSelected = true;
 					if (start > selected)
@@ -705,6 +723,10 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 		sfRectangleShape_setSize(rect, (sfVector2f){560, 300});
 		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 0});
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfText_setColor(text, (sfColor){0, 0, 0, 255});
+		sfText_setString(text, realPath);
+		sfText_setPosition(text, (sfVector2f){10, 0});
+		sfRenderWindow_drawText(window, text, NULL);
 		sfRenderWindow_display(window);
 	}
 	sfRectangleShape_destroy(rect);
@@ -715,12 +737,13 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 	return (NULL);
 }
 
-Sprite	*loadConfig()
+Sprite	*loadConfig(char *path)
 {
 	Sprite	*array = malloc(sizeof(*array));
 	int	len = 1;
 	bool	found = false;
 	void	*buff;
+	char	buffer[PATH_MAX];
 
 	memset(array, 0, sizeof(*array));
 	for (int i = 0; ; i++) {
@@ -728,7 +751,8 @@ Sprite	*loadConfig()
 		if (!configs[i].extension) {
 			array[len - 1].path = configs[i].path;
 			array[len - 1].sprite = sfSprite_create();
-			array[len - 1].texture = sfTexture_createFromFile(configs[i].path, NULL);
+			sprintf(buffer, "%s%s", path, configs[i].path);
+			array[len - 1].texture = sfTexture_createFromFile(buffer, NULL);
 			array[len - 1].extensions = NULL;
 			array[len - 1].nbOfExtensions = 0;
 			sfSprite_setTexture(array[len - 1].sprite, array[len - 1].texture, sfFalse);
@@ -766,7 +790,8 @@ Sprite	*loadConfig()
 			array = buff;
 			array[len - 2].path = configs[i].path;
 			array[len - 2].sprite = sfSprite_create();
-			array[len - 2].texture = sfTexture_createFromFile(configs[i].path, NULL);
+			sprintf(buffer, "%s%s", path, configs[i].path);
+			array[len - 2].texture = sfTexture_createFromFile(buffer, NULL);
 			array[len - 2].extensions = malloc(sizeof(*array[len - 2].extensions));
 			array[len - 2].nbOfExtensions = 1;
 			if (!array[len - 2].extensions) {
@@ -786,6 +811,31 @@ Sprite	*loadConfig()
 	return (array);
 }
 
+char	*loadFile(char *path)
+{
+	char		*buffer = malloc(PATH_MAX + 1);
+	int		fd;
+
+	if (!buffer)
+		return (NULL);
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return (NULL);
+	buffer[read(fd, buffer, PATH_MAX)] = '\0';
+	close(fd);
+	return (buffer);
+}
+
+void	saveToFile(char *path, char *content)
+{
+	int	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+
+	if (fd < 0)
+		return;
+	write(fd, content, strlen(content));
+	close(fd);
+}
+
 int	main(int argc, char **args)
 {
 	sfRenderWindow	*window;
@@ -797,7 +847,8 @@ int	main(int argc, char **args)
 	sfVideoMode	mode = {1280, 960, 32};
 	char		*buffer;
 	char		*path = NULL;
-	Sprite		*sprites = loadConfig();
+	Sprite		*sprites;
+	char		*lastPath = NULL;
 
 	#ifdef _WIN32
 		signal(SIGSEGV, sighandler);
@@ -821,10 +872,10 @@ int	main(int argc, char **args)
 			args[0][1] = '/';
 			args[0][2] = '\0';
 		}
+	sprites = loadConfig(args[0]);
 	buffer = malloc(strlen(args[0]) + 10);
 	sprintf(buffer, "%sarial.ttf", args[0]);
 	font = sfFont_createFromFile(buffer);
-	free(buffer);
 	if (!window || !text)
 		return EXIT_FAILURE;
 	sfText_setCharacterSize(text, 20);
@@ -836,12 +887,51 @@ int	main(int argc, char **args)
 	sfRenderWindow_drawText(window, text, NULL);
 	sfRenderWindow_display(window);
 	loadSounds(args[0], sounds, soundBuffers, debug, PIANO);
+	sprintf(buffer, "%slastPath", args[0]);
 	if (argc == 1 || (argc == 2 && strcmp(args[1], "debug") == 0)) {
+		path = loadFile(buffer) ?: strdup(args[0]);
 		do {
-			free(path);
-			path = exploreFile(args[0], ".mid", "Midi files", text, sprites);
+			free(lastPath);
+			lastPath = path;
+			for (int i = strlen(lastPath) - 1; i >= 0; i--) {
+				if (lastPath[i] == '/' || lastPath[i] == '\\') {
+					lastPath[i + 1] = 0;
+					break;
+				} else if (i == 0) {
+					lastPath[0] = '.';
+					lastPath[1] = '/';
+					lastPath[2] = '\0';
+				}
+			}
+			path = exploreFile(lastPath, ".mid", "Midi files", text, sprites);
 		} while (path && playFile(path, args[0], debug, window, sounds, soundBuffers, text));
+		if (path) {
+			for (int i = strlen(path) - 1; i >= 0; i--) {
+				if (path[i] == '/' || path[i] == '\\') {
+					path[i + 1] = 0;
+					break;
+				} else if (i == 0) {
+					path[0] = '.';
+					path[1] = '/';
+					path[2] = '\0';
+				}
+			}
+			saveToFile(buffer, path);
+		} else if (lastPath) {
+			for (int i = strlen(lastPath) - 1; i >= 0; i--) {
+				if (lastPath[i] == '/' || lastPath[i] == '\\') {
+					lastPath[i + 1] = 0;
+					break;
+				} else if (i == 0) {
+					lastPath[0] = '.';
+					lastPath[1] = '/';
+					lastPath[2] = '\0';
+				}
+			}
+			saveToFile(buffer, lastPath);
+		}
 		free(path);
+		free(lastPath);
 	} else {
 		printf("Play list contains:\n");
 		for (int i = 1 + debug; i < argc; i++)
@@ -856,5 +946,6 @@ int	main(int argc, char **args)
 			sfSound_destroy(sounds[i][j]);
 			sfSoundBuffer_destroy(soundBuffers[i][j]);
 		}
+	free(buffer);
 	return (EXIT_SUCCESS);
 }
