@@ -682,8 +682,8 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 					convertStringToUnicode(buffer, displayedPath);
 				}
 			} else if (event.type == sfEvtTextEntered) {
-				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1) {
-					for (int i = cursorPos; displayedPath[i - 1]; i++)
+				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127) {
+					for (int i = strlen_unicode(displayedPath); i >= cursorPos; i--)
 						displayedPath[i + 1] = displayedPath[i];
 					displayedPath[cursorPos++] = event.text.unicode;
 				}
