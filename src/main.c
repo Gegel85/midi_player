@@ -453,7 +453,103 @@ FileInfos	*getDirEntries(char *path)
 	return (entries);
 }
 
-char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Sprite *sprites)
+size_t	strlen_unicode(sfUint32 *str)
+{
+	size_t i = 0;
+
+	for (; str[i]; i++);
+	return (i);
+}
+
+float	getWordSize(sfUint32 *string, int start, int end, sfFont *font, int size)
+{
+	float	result = 0;
+
+	for (int i = start; string[i] && i < end; i++)
+		result += sfFont_getGlyph(font, string[i], size, false, 0).advance;
+	return (result);
+}
+
+int	getWordPosition(sfUint32 *string, float position, sfFont *font, int size)
+{
+	float	result = 0;
+
+	for (int i = 0; string[i]; i++) {
+		if (result >= position)
+			return (i);
+		result += sfFont_getGlyph(font, string[i], size, false, 0).advance;
+	}
+	return (strlen_unicode(string));
+}
+
+sfUint32	*convertStringToUnicode(unsigned char *str, sfUint32 *buffer)
+{
+	int	bufferIndex = 0;
+
+	if (!buffer && !(buffer = malloc(strlen(str) * sizeof(*buffer))))
+		return (NULL);
+	for (int i = 0; str[i]; i++)
+		if (str[i] >= 240) {
+			buffer[bufferIndex++] = ((str[i] - 240) << 18) + ((str[i + 1] - 128) << 12) + ((str[i + 2] - 128) << 6) + str[i + 3] - 128;
+			i += 3;
+		} else if (str[i] >= 224) {
+			buffer[bufferIndex++] = ((str[i] - 224) << 12) + ((str[i + 1] - 128) << 6) + str[i + 2] - 128;
+			i += 2;
+		} else if (str[i] >= 192) {
+			buffer[bufferIndex++] = ((str[i] - 192) << 6) + str[i + 1] - 128;
+			i++;
+		} else
+			buffer[bufferIndex++] = str[i];
+	buffer[bufferIndex] = 0;
+	return (buffer);
+}
+
+size_t	calcStringLen(sfUint32 *str)
+{
+	int	len = 0;
+
+	for (int i = 0; str[i]; i++) {
+		if (str[i] < 0x80)
+			len++;
+		else if (str[i] < 0x800)
+			len += 2;
+		else if (str[i] < 0x10000)
+			len += 3;
+		else
+			len += 4;
+	}
+	return (len);
+}
+
+char	*convertUnicodeToString(sfUint32 *str, char *buffer)
+{
+	int	bufferIndex = 0;
+
+	if (!buffer)
+		buffer = malloc((calcStringLen(str) + 1) * sizeof(*buffer));
+	if (!buffer)
+		return (NULL);
+	for (int i = 0; str[i]; i++)
+		if (str[i] < 0x80) {
+			buffer[bufferIndex++] = str[i];
+		} else if (str[i] < 0x800) {
+			buffer[bufferIndex++] = str[i] / (1 << 6) + 192;
+			buffer[bufferIndex++] = (str[i] >> 6) + 128;
+		} else if (str[i] < 0x10000) {
+			buffer[bufferIndex++] = str[i] / (1 << 12) + 224;
+			buffer[bufferIndex++] = (str[i] >> 12) + 128;
+			buffer[bufferIndex++] = (str[i] >> 6) + 128;
+		} else {
+			buffer[bufferIndex++] = str[i] / (1 << 18) + 240;
+			buffer[bufferIndex++] = (str[i] >> 18) + 128;
+			buffer[bufferIndex++] = (str[i] >> 12) + 128;
+			buffer[bufferIndex++] = (str[i] >> 6) + 128;
+		}
+	buffer[bufferIndex] = 0;
+	return (buffer);
+}
+
+char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Sprite *sprites)
 {
 	sfVideoMode	mode = {600, 400, 32};
 	sfRectangleShape*rect = sfRectangleShape_create();
@@ -463,12 +559,21 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 	int		selected = 0;
 	char		*buff;
 	void		*buf;
-	bool		isSelected = false;
 	char		realPath[PATH_MAX + 1];
+	char		buffer[PATH_MAX + 2];
+	sfUint32	bufferUnicode[PATH_MAX + 1];
 	FileInfos	*direntry;
 	bool		displayed = false;
+	sfUint32	displayedPath[PATH_MAX + 2];
 	int		len;
+	int		menuSelected = -1;
+	unsigned int	cursorPos = 0;
+	sfVector2i	selectedText = {0, 0};
+	sfText		*text = sfText_create();
+	int		leftButtonIsPressed = 0;
 
+	sfText_setFont(text, font);
+	memset(displayedPath, 0, sizeof(displayedPath));
 	if (!realpath(path, realPath)) {
 		printf("%s: %s\n", realPath, strerror(errno));
 		realpath(".", realPath);
@@ -496,11 +601,32 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 					start = len - 15;
 				else
 					start -= event.mouseWheelScroll.delta / 2;
+			} else if (event.type == sfEvtMouseMoved && leftButtonIsPressed) {
+				if (menuSelected == 1) {
+					selectedText.y = getWordPosition(displayedPath, event.mouseMove.x - 30, font, 15);
+					cursorPos = selectedText.y;
+				}
+			} else if ((event.type == sfEvtMouseButtonReleased && event.mouseButton.button == sfMouseLeft) || event.type == sfEvtMouseLeft) {
+				leftButtonIsPressed--;
+				if (leftButtonIsPressed < 0)
+					leftButtonIsPressed = 0;
 			} else if (event.type == sfEvtMouseButtonPressed && event.mouseButton.button == sfMouseLeft) {
-				if (event.mouseButton.x <= 20 || event.mouseButton.x >= 580 || event.mouseButton.y <= 20)
-					isSelected = false;
+				leftButtonIsPressed++;
+				if (event.mouseButton.x < 380 && event.mouseButton.x > 20 && event.mouseButton.y > 330 && event.mouseButton.y < 370) {
+					if (menuSelected == 1) {
+						selectedText.x = getWordPosition(displayedPath, event.mouseButton.x - 30, font, 15);
+						selectedText.y = selectedText.x;
+						cursorPos = selectedText.x;
+					} else {
+						menuSelected = 1;
+						selectedText.x = 0;
+						selectedText.y = strlen_unicode(displayedPath);
+					}
+				} else if (event.mouseButton.x <= 20 || event.mouseButton.x >= 580 || event.mouseButton.y <= 20 || event.mouseButton.y >= 320)
+					menuSelected = -1;
 				else if (event.mouseButton.y <= 320) {
-					if (isSelected && (int)((float)event.mouseButton.y / 20 + start - 1) == selected) {
+					if (menuSelected == 0 && (int)((float)event.mouseButton.y / 20 + start - 1) == selected) {
+						displayedPath[0] = '\0';
 						if ((direntry[selected].stats.st_mode & S_IFMT) == S_IFDIR) {
 							buff = strdup(realPath);
 							path = concatf("%s/%s", realPath, direntry[selected].name);
@@ -533,7 +659,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 							for (len = 0; !direntry[len].isEnd; len++);
 							selected = 0;
 							start = 0;
-							isSelected = false;
+							menuSelected = -1;
 							if (!direntry) {
 								sfRectangleShape_destroy(rect);
 								sfRenderWindow_destroy(window);
@@ -550,14 +676,27 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 							return (path);
 						}
 					}
-					if (!isSelected)
-						isSelected = true;
+					menuSelected = 0;
 					selected = (float)event.mouseButton.y / 20 + start - 1;
+					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+					convertStringToUnicode(buffer, displayedPath);
+				}
+			} else if (event.type == sfEvtTextEntered) {
+				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1) {
+					for (int i = cursorPos; displayedPath[i - 1]; i++)
+						displayedPath[i + 1] = displayedPath[i];
+					displayedPath[cursorPos++] = event.text.unicode;
 				}
 			} else if (event.type == sfEvtKeyPressed) {
-				if (event.key.code == sfKeyUp) {
-					if (!isSelected) {
-						isSelected = true;
+				if (event.key.code == sfKeyA) {
+					if (menuSelected == 1 && event.key.control) {
+						selectedText.x = 0;
+						selectedText.y = strlen_unicode(displayedPath);
+						cursorPos = selectedText.y;
+					}
+				} else if (event.key.code == sfKeyUp) {
+					if (menuSelected != 0) {
+						menuSelected = 0;
 						if (start > selected)
 							start = selected;
 						else if (start + 15 < selected)
@@ -572,9 +711,11 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 						if (start > selected)
 							start = selected;
 					}
+					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+					convertStringToUnicode(buffer, displayedPath);
 				} else if (event.key.code == sfKeyDown) {
-					if (!isSelected) {
-						isSelected = true;
+					if (menuSelected != 0) {
+						menuSelected = 0;
 						if (start > selected)
 							start = selected;
 						else if (start + 15 < selected)
@@ -589,37 +730,149 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 						if (start + 14 <= selected)
 							start = selected - 14;
 					}
+					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+					convertStringToUnicode(buffer, displayedPath);
+				} else if (event.key.code == sfKeyLeft) {
+					if (menuSelected == 1) {
+						if (cursorPos > 0)
+							cursorPos -= 1;
+						if (!event.key.shift)
+							selectedText.x = cursorPos;
+						selectedText.y = cursorPos;
+					} else if (menuSelected == 0) {
+						if (start > selected)
+							start = selected;
+						else if (start + 15 < selected)
+							start = selected - 14;
+						sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+						convertStringToUnicode(buffer, displayedPath);
+					}
+				} else if (event.key.code == sfKeyRight) {
+					if (menuSelected == 1) {
+						if (cursorPos < strlen_unicode(displayedPath))
+							cursorPos += 1;
+						if (!event.key.shift)
+							selectedText.x = cursorPos;
+						selectedText.y = cursorPos;
+					} else if (menuSelected == 0) {
+						if (start > selected)
+							start = selected;
+						else if (start + 15 < selected)
+							start = selected - 14;
+						sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+						convertStringToUnicode(buffer, displayedPath);
+					}
+				} else if (event.key.code == sfKeyHome) {
+					if (menuSelected == 1) {
+						cursorPos = 0;
+						if (!event.key.shift)
+							selectedText.x = cursorPos;
+						selectedText.y = cursorPos;
+					}
+				} else if (event.key.code == sfKeyEnd) {
+					if (menuSelected == 1) {
+						cursorPos = strlen_unicode(displayedPath);
+						if (!event.key.shift)
+							selectedText.x = cursorPos;
+						selectedText.y = cursorPos;
+					}
 				} else if (event.key.code == sfKeyPageUp) {
-					if (selected <= 15) {
-						selected = 0;
-						start = 0;
+					if (menuSelected == 0) {
+						if (selected <= 15) {
+							selected = 0;
+							start = 0;
+						} else {
+							selected -= 15;
+							start = selected;
+						}
 					} else {
-						selected -= 15;
-						start = selected;
+						if (start <= 15)
+							start = 0;
+						else
+							start -= 15;
 					}
+					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+					convertStringToUnicode(buffer, displayedPath);
 				} else if (event.key.code == sfKeyPageDown) {
-					if (selected >= len - 15) {
-						selected = len - 1;
-						start = len - 15;
+					if (menuSelected == 0) {
+						if (selected >= len - 15) {
+							selected = len - 1;
+							start = len - 15;
+						} else {
+							selected += 15;
+							start = selected - 14;
+						}
 					} else {
-						selected += 15;
-						start = selected - 14;
+						if (start >= len - 30)
+							start = len - 15;
+						else
+							start += 15;
 					}
+					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+					convertStringToUnicode(buffer, displayedPath);
 				} else if (event.key.code == sfKeySpace) {
-					isSelected = true;
-					if (start > selected)
-						start = selected;
-					else if (start + 15 < selected)
-						start = selected - 14;
+					if (menuSelected == -1)
+						menuSelected = 0;
+					if (menuSelected == 0) {
+						if (start > selected)
+							start = selected;
+						else if (start + 15 < selected)
+							start = selected - 14;
+						sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
+						convertStringToUnicode(buffer, displayedPath);
+					}
+				}
+				#ifndef sfKeyBackspace
+				else if (event.key.code == sfKeyBack) {
+				#else
+				else if (event.key.code == sfKeyBackspace) {
+				#endif
+					if (menuSelected == 1 && selectedText.x != selectedText.y) {
+						for (int i = selectedText.x > selectedText.y ? selectedText.y : selectedText.x; displayedPath[i + abs(selectedText.x - selectedText.y) - 1]; i++)
+							displayedPath[i] = displayedPath[i + abs(selectedText.x - selectedText.y)];
+						selectedText.x = 0;
+						selectedText.y = 0;
+					} else if (menuSelected == 1 && cursorPos) {
+						for (int i = --cursorPos; displayedPath[i - 1]; i++)
+							displayedPath[i] = displayedPath[i + 1];
+					}
+				} else if (event.key.code == sfKeyDelete) {
+					if (menuSelected == 1 && selectedText.x != selectedText.y) {
+						for (int i = selectedText.x > selectedText.y ? selectedText.y : selectedText.x; displayedPath[i + abs(selectedText.x - selectedText.y) - 1]; i++)
+							displayedPath[i] = displayedPath[i + abs(selectedText.x - selectedText.y)];
+						selectedText.x = 0;
+						selectedText.y = 0;
+					} else if (menuSelected == 1 && cursorPos < strlen_unicode(displayedPath)) {
+						for (int i = cursorPos; displayedPath[i - 1]; i++)
+							displayedPath[i] = displayedPath[i + 1];
+					}
 				}
 				#ifndef sfKeyEnter
 				else if (event.key.code == sfKeyReturn) {
 				#else
 				else if (event.key.code == sfKeyEnter) {
 				#endif
-					if ((direntry[selected].stats.st_mode & S_IFMT) == S_IFDIR) {
-						buff = strdup(realPath);
+					struct stat	stats;
+
+					if (menuSelected == 0) {
 						path = concatf("%s/%s", realPath, direntry[selected].name);
+						stats = direntry[selected].stats;
+					} else if (menuSelected == 1) {
+						path = convertUnicodeToString(displayedPath, NULL);
+						if (stat(path, &stats) < 0) {
+							buf = concatf("%s: %s\n", path, strerror(errno));
+							printf("%s: %s\n", path, strerror(errno));
+							dispMsg("Error", buf, 0);
+							free(path);
+							free(buf);
+							continue;
+						}
+						selectedText.x = 0;
+						selectedText.y = strlen_unicode(displayedPath);
+						cursorPos = selectedText.y;
+					}
+					if ((stats.st_mode & S_IFMT) == S_IFDIR) {
+						buff = strdup(realPath);
 						if (!realpath(path, realPath)) {
 							free(path);
 							buf = concatf("%s: %s\n", realPath, strerror(errno));
@@ -673,13 +926,13 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
 		for (int i = start; !direntry[i].isEnd && i - start < 15; i++) {
 			displayed = false;
-			if (isSelected && selected == i) {
+			if (menuSelected == 0 && selected == i) {
 				sfText_setColor(text, (sfColor){255, 255, 255, 255});
 				sfRectangleShape_setFillColor(rect, (sfColor){0, 0, 255, 255});
 				sfRectangleShape_setPosition(rect, (sfVector2f){20, 20 + (i - start) * 20});
 				sfRectangleShape_setSize(rect, (sfVector2f){560, 20});
 				sfRenderWindow_drawRectangleShape(window, rect, NULL);
-			} else if (isSelected && selected + 1 == i)
+			} else if (menuSelected == 0 && selected + 1 == i)
 				sfText_setColor(text, (sfColor){0, 0, 0, 255});
 			for (int j = 0; (j == 0 || sprites[j - 1].extensions) && !displayed; j++)
 				for (int k = 0; !k || sprites[j].nbOfExtensions > k; k++) {
@@ -705,10 +958,11 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 						displayed = true;
 					}
 				}
-			sfText_setString(text, direntry[i].name);
+			sfText_setUnicodeString(text, convertStringToUnicode(direntry[i].name, bufferUnicode));
 			sfText_setPosition(text, (sfVector2f){40, 20 + (i - start) * 20});
 			sfRenderWindow_drawText(window, text, NULL);
 		}
+		sfText_setColor(text, (sfColor){0, 0, 0, 255});
 		sfRectangleShape_setOutlineThickness(rect, 0);
 		sfRectangleShape_setPosition(rect, (sfVector2f){0, 0});
 		sfRectangleShape_setSize(rect, (sfVector2f){600, 20});
@@ -718,13 +972,47 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfText *text, Spri
 		sfRectangleShape_setSize(rect, (sfVector2f){600, 80});
 		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 255});
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfRectangleShape_setPosition(rect, (sfVector2f){20, 330});
+		sfRectangleShape_setSize(rect, (sfVector2f){360, 30});
+		sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 255});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfText_setUnicodeString(text, displayedPath);
+		sfText_setPosition(text, (sfVector2f){30, 335});
+		if (menuSelected == 1) {
+			if (selectedText.x > selectedText.y) {
+				sfRectangleShape_setPosition(rect, (sfVector2f){getWordSize(displayedPath, 0, selectedText.y, font, 15) + 30, 335});
+				sfRectangleShape_setSize(rect, (sfVector2f){getWordSize(displayedPath, selectedText.y, selectedText.x, font, 15), 20});
+			} else {
+				sfRectangleShape_setPosition(rect, (sfVector2f){getWordSize(displayedPath, 0, selectedText.x, font, 15) + 30, 335});
+				sfRectangleShape_setSize(rect, (sfVector2f){getWordSize(displayedPath, selectedText.x, selectedText.y, font, 15), 20});
+			}
+			sfRectangleShape_setFillColor(rect, (sfColor){0, 0, 255, 255});
+			sfRenderWindow_drawRectangleShape(window, rect, NULL);
+			if (time(NULL) % 2) {
+				sfRectangleShape_setOutlineThickness(rect, 1);
+				sfRectangleShape_setPosition(rect, (sfVector2f){getWordSize(displayedPath, 0, cursorPos, font, 15) + 30, 335});
+				sfRectangleShape_setSize(rect, (sfVector2f){0, 20});
+				sfRectangleShape_setFillColor(rect, (sfColor){0, 0, 0, 255});
+				sfRenderWindow_drawRectangleShape(window, rect, NULL);
+				sfRectangleShape_setOutlineThickness(rect, 0);
+			}
+		}
+		sfRenderWindow_drawText(window, text, NULL);
+		sfRectangleShape_setPosition(rect, (sfVector2f){380, 320});
+		sfRectangleShape_setSize(rect, (sfVector2f){220, 80});
+		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 255});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
 		sfRectangleShape_setOutlineThickness(rect, 1);
+		sfRectangleShape_setPosition(rect, (sfVector2f){20, 330});
+		sfRectangleShape_setSize(rect, (sfVector2f){360, 30});
+		sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 0});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
 		sfRectangleShape_setPosition(rect, (sfVector2f){20, 20});
 		sfRectangleShape_setSize(rect, (sfVector2f){560, 300});
 		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 0});
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
 		sfText_setColor(text, (sfColor){0, 0, 0, 255});
-		sfText_setString(text, realPath);
+		sfText_setUnicodeString(text, convertStringToUnicode(realPath, bufferUnicode));
 		sfText_setPosition(text, (sfVector2f){10, 0});
 		sfRenderWindow_drawText(window, text, NULL);
 		sfRenderWindow_display(window);
@@ -813,8 +1101,8 @@ Sprite	*loadConfig(char *path)
 
 char	*loadFile(char *path)
 {
-	char		*buffer = malloc(PATH_MAX + 1);
-	int		fd;
+	char	*buffer = malloc(PATH_MAX + 1);
+	int	fd;
 
 	if (!buffer)
 		return (NULL);
@@ -903,7 +1191,7 @@ int	main(int argc, char **args)
 					lastPath[2] = '\0';
 				}
 			}
-			path = exploreFile(lastPath, ".mid", "Midi files", text, sprites);
+			path = exploreFile(lastPath, ".mid", "Midi files", font, sprites);
 		} while (path && playFile(path, args[0], debug, window, sounds, soundBuffers, text));
 		if (path) {
 			for (int i = strlen(path) - 1; i >= 0; i--) {

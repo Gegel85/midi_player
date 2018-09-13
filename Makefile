@@ -27,10 +27,11 @@ LDFLAGS =				\
 	lib/midi_parser/midiparser.a	\
 	-lconcatf			\
 
-CFLAGS= $(INC)		\
-	-W		\
-	-Wall		\
-	-Wextra		\
+CFLAGS= $(INC)			\
+	-W			\
+	-Wall			\
+	-Wextra			\
+	-Wno-pointer-sign	\
 
 CC =	gcc
 
