@@ -683,7 +683,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 				}
 			} else if (event.type == sfEvtTextEntered) {
 				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127) {
-					for (int i = strlen_unicode(displayedPath); i >= cursorPos; i--)
+					for (int i = strlen_unicode(displayedPath); i >= (int)cursorPos; i--)
 						displayedPath[i + 1] = displayedPath[i];
 					displayedPath[cursorPos++] = event.text.unicode;
 				}
