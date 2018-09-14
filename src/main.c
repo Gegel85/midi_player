@@ -533,17 +533,17 @@ char	*convertUnicodeToString(sfUint32 *str, char *buffer)
 		if (str[i] < 0x80) {
 			buffer[bufferIndex++] = str[i];
 		} else if (str[i] < 0x800) {
-			buffer[bufferIndex++] = str[i] / (1 << 6) + 192;
-			buffer[bufferIndex++] = (str[i] >> 6) + 128;
+			buffer[bufferIndex++] = (str[i] >> 6) + 192;
+			buffer[bufferIndex++] = str[i] % (1 << 6) + 128;
 		} else if (str[i] < 0x10000) {
-			buffer[bufferIndex++] = str[i] / (1 << 12) + 224;
-			buffer[bufferIndex++] = (str[i] >> 12) + 128;
-			buffer[bufferIndex++] = (str[i] >> 6) + 128;
+			buffer[bufferIndex++] = (str[i] >> 12) + 224;
+			buffer[bufferIndex++] = (str[i] >> 6) % (1 << 12) + 128;
+			buffer[bufferIndex++] = str[i]  % (1 << 6) + 128;
 		} else {
-			buffer[bufferIndex++] = str[i] / (1 << 18) + 240;
-			buffer[bufferIndex++] = (str[i] >> 18) + 128;
-			buffer[bufferIndex++] = (str[i] >> 12) + 128;
-			buffer[bufferIndex++] = (str[i] >> 6) + 128;
+			buffer[bufferIndex++] = (str[i] >> 18) + 240;
+			buffer[bufferIndex++] = (str[i] >> 12) % (1 << 18) + 128;
+			buffer[bufferIndex++] = (str[i] >> 6) % (1 << 12) + 128;
+			buffer[bufferIndex++] = str[i] % (1 << 6)+ 128;
 		}
 	buffer[bufferIndex] = 0;
 	return (buffer);
@@ -683,9 +683,13 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 				}
 			} else if (event.type == sfEvtTextEntered) {
 				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127) {
+					for (int i = selectedText.x > selectedText.y ? selectedText.y : selectedText.x; displayedPath[i + abs(selectedText.x - selectedText.y) - 1]; i++)
+						displayedPath[i] = displayedPath[i + abs(selectedText.x - selectedText.y)];
 					for (int i = strlen_unicode(displayedPath); i >= (int)cursorPos; i--)
 						displayedPath[i + 1] = displayedPath[i];
 					displayedPath[cursorPos++] = event.text.unicode;
+					selectedText.x = cursorPos;
+					selectedText.y = cursorPos;
 				}
 			} else if (event.type == sfEvtKeyPressed) {
 				if (event.key.code == sfKeyA) {
@@ -833,7 +837,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						selectedText.x = 0;
 						selectedText.y = 0;
 					} else if (menuSelected == 1 && cursorPos) {
-						for (int i = --cursorPos; displayedPath[i - 1]; i++)
+						for (int i = --cursorPos; i == 0 || displayedPath[i - 1]; i++)
 							displayedPath[i] = displayedPath[i + 1];
 					}
 				} else if (event.key.code == sfKeyDelete) {
@@ -843,7 +847,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						selectedText.x = 0;
 						selectedText.y = 0;
 					} else if (menuSelected == 1 && cursorPos < strlen_unicode(displayedPath)) {
-						for (int i = cursorPos; displayedPath[i - 1]; i++)
+						for (int i = cursorPos; i == 0 || displayedPath[i - 1]; i++)
 							displayedPath[i] = displayedPath[i + 1];
 					}
 				}
@@ -1002,6 +1006,12 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 		sfRectangleShape_setSize(rect, (sfVector2f){220, 80});
 		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 255});
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		if (len > 15) {
+			sfRectangleShape_setPosition(rect, (sfVector2f){570, (float)start * 300 / (len - 15) - ((float)start / (len - 15)) * 6000 / len + 20});
+			sfRectangleShape_setSize(rect, (sfVector2f){10, 6000 / len + 1});
+			sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 255});
+			sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		}
 		sfRectangleShape_setOutlineThickness(rect, 1);
 		sfRectangleShape_setPosition(rect, (sfVector2f){20, 330});
 		sfRectangleShape_setSize(rect, (sfVector2f){360, 30});
