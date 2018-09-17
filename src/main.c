@@ -63,7 +63,8 @@ void	sighandler(int signum)
 
 char	*realpath(char *path, char *buffer)
 {
-	GetFullPathNameA(path, MAX_PATH, buffer, NULL);
+	if (!GetFullPathNameA(path, MAX_PATH + 1, buffer, NULL))
+		return (NULL);
 	return (buffer);
 }
 #endif
@@ -416,7 +417,7 @@ FileInfos	*getDirEntries(char *path)
 	FileInfos	buffer;
 
 	if (!dirstream) {
-		printf("%s: %s\n", path, strerror(errno));
+		printf("Error: %s: %s\n", path, strerror(errno));
 		return (NULL);
 	}
 	entries = malloc(sizeof(*entries));
@@ -489,6 +490,9 @@ sfUint32	*convertStringToUnicode(unsigned char *str, sfUint32 *buffer)
 	if (!buffer && !(buffer = malloc(strlen(str) * sizeof(*buffer))))
 		return (NULL);
 	for (int i = 0; str[i]; i++)
+		#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+		buffer[bufferIndex++] = str[i];
+		#else
 		if (str[i] >= 240) {
 			buffer[bufferIndex++] = ((str[i] - 240) << 18) + ((str[i + 1] - 128) << 12) + ((str[i + 2] - 128) << 6) + str[i + 3] - 128;
 			i += 3;
@@ -500,6 +504,7 @@ sfUint32	*convertStringToUnicode(unsigned char *str, sfUint32 *buffer)
 			i++;
 		} else
 			buffer[bufferIndex++] = str[i];
+		#endif
 	buffer[bufferIndex] = 0;
 	return (buffer);
 }
@@ -508,6 +513,9 @@ size_t	calcStringLen(sfUint32 *str)
 {
 	int	len = 0;
 
+	#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+	return (strlen_unicode(str));
+	#else
 	for (int i = 0; str[i]; i++) {
 		if (str[i] < 0x80)
 			len++;
@@ -519,6 +527,7 @@ size_t	calcStringLen(sfUint32 *str)
 			len += 4;
 	}
 	return (len);
+	#endif
 }
 
 char	*convertUnicodeToString(sfUint32 *str, char *buffer)
@@ -530,6 +539,9 @@ char	*convertUnicodeToString(sfUint32 *str, char *buffer)
 	if (!buffer)
 		return (NULL);
 	for (int i = 0; str[i]; i++)
+		#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+		buffer[bufferIndex++] = str[i];
+		#else
 		if (str[i] < 0x80) {
 			buffer[bufferIndex++] = str[i];
 		} else if (str[i] < 0x800) {
@@ -545,6 +557,7 @@ char	*convertUnicodeToString(sfUint32 *str, char *buffer)
 			buffer[bufferIndex++] = (str[i] >> 6) % (1 << 12) + 128;
 			buffer[bufferIndex++] = str[i] % (1 << 6)+ 128;
 		}
+		#endif
 	buffer[bufferIndex] = 0;
 	return (buffer);
 }
@@ -564,6 +577,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 	sfUint32	bufferUnicode[PATH_MAX + 1];
 	FileInfos	*direntry;
 	bool		displayed = false;
+	int		scrollBarPressed = 0;
 	sfUint32	displayedPath[PATH_MAX + 2];
 	int		len;
 	int		menuSelected = -1;
@@ -575,16 +589,27 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 	sfText_setFont(text, font);
 	memset(displayedPath, 0, sizeof(displayedPath));
 	if (!realpath(path, realPath)) {
-		printf("%s: %s\n", realPath, strerror(errno));
+		buf = concatf("Error: %s: %s\n", realPath, strerror(errno));
+		printf("Error: %s: %s\n", realPath, strerror(errno));
+		dispMsg("Error", buf, 0);
+		free(buf);
 		realpath(".", realPath);
 	}
 	direntry = getDirEntries(realPath);
-	sfText_setCharacterSize(text, 15);
+	if (!direntry && errno != 0) {
+		buf = concatf("Error: %s: %s\n", realPath, strerror(errno));
+		printf("Error: %s: %s\n", realPath, strerror(errno));
+		dispMsg("Error", buf, 0);
+		free(buf);
+		realpath(".", realPath);
+		direntry = getDirEntries(realPath);
+	}
 	if (!direntry) {
 		sfRectangleShape_destroy(rect);
 		sfRenderWindow_destroy(window);
 		return (NULL);
 	}
+	sfText_setCharacterSize(text, 15);
 	for (len = 0; !direntry[len].isEnd; len++);
 	while (sfRenderWindow_isOpen(window)) {
 		sfRectangleShape_setOutlineThickness(rect, 1);
@@ -606,13 +631,28 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 					selectedText.y = getWordPosition(displayedPath, event.mouseMove.x - 30, font, 15);
 					cursorPos = selectedText.y;
 				}
+				if (scrollBarPressed) {
+					start = (float)((scrollBarPressed - event.mouseMove.y + 20) * (len - 15) * len) / (6000 - 300 * len);
+					if (start < 0)
+						start = 0;
+					else if (start > len - 15)
+						start = len - 15;
+				}
 			} else if ((event.type == sfEvtMouseButtonReleased && event.mouseButton.button == sfMouseLeft) || event.type == sfEvtMouseLeft) {
 				leftButtonIsPressed--;
+				scrollBarPressed = false;
 				if (leftButtonIsPressed < 0)
 					leftButtonIsPressed = 0;
 			} else if (event.type == sfEvtMouseButtonPressed && event.mouseButton.button == sfMouseLeft) {
 				leftButtonIsPressed++;
-				if (event.mouseButton.x < 380 && event.mouseButton.x > 20 && event.mouseButton.y > 330 && event.mouseButton.y < 370) {
+				if (
+					event.mouseButton.x >= 569 &&
+					event.mouseButton.x <= 580 &&
+					event.mouseButton.y >= (float)start * 300 / (len - 15) - ((float)start / (len - 15)) * 6000 / len + 20 &&
+					event.mouseButton.y <= (float)start * 300 / (len - 15) - ((float)start / (len - 15)) * 6000 / len + 20 + 6000 / len + 1
+				)
+					scrollBarPressed = event.mouseButton.y - ((float)start * 300 / (len - 15) - ((float)start / (len - 15)) * 6000 / len + 20);
+				else if (event.mouseButton.x < 380 && event.mouseButton.x > 20 && event.mouseButton.y > 330 && event.mouseButton.y < 370) {
 					if (menuSelected == 1) {
 						selectedText.x = getWordPosition(displayedPath, event.mouseButton.x - 30, font, 15);
 						selectedText.y = selectedText.x;
@@ -622,7 +662,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						selectedText.x = 0;
 						selectedText.y = strlen_unicode(displayedPath);
 					}
-				} else if (event.mouseButton.x <= 20 || event.mouseButton.x >= 580 || event.mouseButton.y <= 20 || event.mouseButton.y >= 320)
+				} else if (event.mouseButton.x <= 20 || event.mouseButton.x >= 570 || event.mouseButton.y <= 20 || event.mouseButton.y >= 320)
 					menuSelected = -1;
 				else if (event.mouseButton.y <= 320) {
 					if (menuSelected == 0 && (int)((float)event.mouseButton.y / 20 + start - 1) == selected) {
@@ -632,8 +672,8 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							path = concatf("%s/%s", realPath, direntry[selected].name);
 							if (!realpath(path, realPath)) {
 								free(path);
-								buf = concatf("%s: %s\n", realPath, strerror(errno));
-								printf("%s: %s\n", realPath, strerror(errno));
+								buf = concatf("Error: %s: %s\n", realPath, strerror(errno));
+								printf("Error: %s: %s\n", realPath, strerror(errno));
 								dispMsg("Error", buf, 0);
 								free(buf);
 								strcpy(realPath, buff);
@@ -643,8 +683,8 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							free(path);
 							buf = getDirEntries(realPath);
 							if (!buf) {
-								buf = concatf("%s: %s\n", realPath, strerror(errno));
-								printf("%s: %s\n", realPath, strerror(errno));
+								buf = concatf("Error: %s: %s\n", realPath, strerror(errno));
+								printf("Error: %s: %s\n", realPath, strerror(errno));
 								dispMsg("Error", buf, 0);
 								free(buf);
 								strcpy(realPath, buff);
@@ -678,8 +718,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 					}
 					menuSelected = 0;
 					selected = (float)event.mouseButton.y / 20 + start - 1;
-					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-					convertStringToUnicode(buffer, displayedPath);
+					convertStringToUnicode(direntry[selected].name, displayedPath);
 				}
 			} else if (event.type == sfEvtTextEntered) {
 				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127) {
@@ -715,8 +754,6 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						if (start > selected)
 							start = selected;
 					}
-					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-					convertStringToUnicode(buffer, displayedPath);
 				} else if (event.key.code == sfKeyDown) {
 					if (menuSelected != 0) {
 						menuSelected = 0;
@@ -734,8 +771,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						if (start + 14 <= selected)
 							start = selected - 14;
 					}
-					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-					convertStringToUnicode(buffer, displayedPath);
+					convertStringToUnicode(direntry[selected].name, displayedPath);
 				} else if (event.key.code == sfKeyLeft) {
 					if (menuSelected == 1) {
 						if (cursorPos > 0)
@@ -748,8 +784,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							start = selected;
 						else if (start + 15 < selected)
 							start = selected - 14;
-						sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-						convertStringToUnicode(buffer, displayedPath);
+						convertStringToUnicode(direntry[selected].name, displayedPath);
 					}
 				} else if (event.key.code == sfKeyRight) {
 					if (menuSelected == 1) {
@@ -763,8 +798,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							start = selected;
 						else if (start + 15 < selected)
 							start = selected - 14;
-						sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-						convertStringToUnicode(buffer, displayedPath);
+						convertStringToUnicode(direntry[selected].name, displayedPath);
 					}
 				} else if (event.key.code == sfKeyHome) {
 					if (menuSelected == 1) {
@@ -789,14 +823,13 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							selected -= 15;
 							start = selected;
 						}
+						convertStringToUnicode(direntry[selected].name, displayedPath);
 					} else {
 						if (start <= 15)
 							start = 0;
 						else
 							start -= 15;
 					}
-					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-					convertStringToUnicode(buffer, displayedPath);
 				} else if (event.key.code == sfKeyPageDown) {
 					if (menuSelected == 0) {
 						if (selected >= len - 15) {
@@ -806,14 +839,13 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							selected += 15;
 							start = selected - 14;
 						}
+						convertStringToUnicode(direntry[selected].name, displayedPath);
 					} else {
 						if (start >= len - 30)
 							start = len - 15;
 						else
 							start += 15;
 					}
-					sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-					convertStringToUnicode(buffer, displayedPath);
 				} else if (event.key.code == sfKeySpace) {
 					if (menuSelected == -1)
 						menuSelected = 0;
@@ -822,8 +854,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							start = selected;
 						else if (start + 15 < selected)
 							start = selected - 14;
-						sprintf(buffer, "%s/%s", realPath, direntry[selected].name);
-						convertStringToUnicode(buffer, displayedPath);
+						convertStringToUnicode(direntry[selected].name, displayedPath);
 					}
 				}
 				#ifndef sfKeyBackspace
@@ -862,36 +893,45 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						path = concatf("%s/%s", realPath, direntry[selected].name);
 						stats = direntry[selected].stats;
 					} else if (menuSelected == 1) {
-						path = convertUnicodeToString(displayedPath, NULL);
+						#if defined _WIN32 || defined __WIN32 || defined __WIN32__
+						if (strlen_unicode(displayedPath) < 2 || displayedPath[1] != ':')
+							path = concatf("%s\\%s", realPath, convertUnicodeToString(displayedPath, buffer));
+						#else
+						if (displayedPath[0] != '/')
+							path = concatf("%s/%s", realPath, convertUnicodeToString(displayedPath, buffer));
+						#endif
+						else
+							path = strdup(convertUnicodeToString(displayedPath, buffer));
 						if (stat(path, &stats) < 0) {
-							buf = concatf("%s: %s\n", path, strerror(errno));
-							printf("%s: %s\n", path, strerror(errno));
+							buf = concatf("Error: %s: %s\n", path, strerror(errno));
+							printf("Error: %s: %s\n", path, strerror(errno));
 							dispMsg("Error", buf, 0);
 							free(path);
 							free(buf);
 							continue;
 						}
-						selectedText.x = 0;
-						selectedText.y = strlen_unicode(displayedPath);
-						cursorPos = selectedText.y;
 					}
+					if (!realpath(path, realPath)) {
+						free(path);
+						buf = concatf("Error: %s: %s\n", realPath, strerror(errno));
+						printf("Error: %s: %s\n", realPath, strerror(errno));
+						dispMsg("Error", buf, 0);
+						free(buf);
+						strcpy(realPath, buff);
+						free(buff);
+						continue;
+					}
+					convertStringToUnicode(path, displayedPath);
+					selectedText.x = 0;
+					selectedText.y = menuSelected == 1 ? strlen_unicode(displayedPath) : 0;
+					cursorPos = selectedText.y;
 					if ((stats.st_mode & S_IFMT) == S_IFDIR) {
 						buff = strdup(realPath);
-						if (!realpath(path, realPath)) {
-							free(path);
-							buf = concatf("%s: %s\n", realPath, strerror(errno));
-							printf("%s: %s\n", realPath, strerror(errno));
-							dispMsg("Error", buf, 0);
-							free(buf);
-							strcpy(realPath, buff);
-							free(buff);
-							continue;
-						}
 						free(path);
 						buf = getDirEntries(realPath);
 						if (!buf) {
-							buf = concatf("%s: %s\n", realPath, strerror(errno));
-							printf("%s: %s\n", realPath, strerror(errno));
+							buf = concatf("Error: %s: %s\n", realPath, strerror(errno));
+							printf("Error: %s: %s\n", realPath, strerror(errno));
 							dispMsg("Error", buf, 0);
 							free(buf);
 							strcpy(realPath, buff);
@@ -980,6 +1020,14 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 		sfRectangleShape_setSize(rect, (sfVector2f){360, 30});
 		sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 255});
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfRectangleShape_setPosition(rect, (sfVector2f){580, 20});
+		sfRectangleShape_setSize(rect, (sfVector2f){20, 300});
+		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 255});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfRectangleShape_setPosition(rect, (sfVector2f){569, 20});
+		sfRectangleShape_setSize(rect, (sfVector2f){11, 300});
+		sfRectangleShape_setFillColor(rect, (sfColor){75, 75, 75, 255});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
 		sfText_setUnicodeString(text, displayedPath);
 		sfText_setPosition(text, (sfVector2f){30, 335});
 		if (menuSelected == 1) {
@@ -1007,7 +1055,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 		sfRectangleShape_setFillColor(rect, (sfColor){200, 200, 200, 255});
 		sfRenderWindow_drawRectangleShape(window, rect, NULL);
 		if (len > 15) {
-			sfRectangleShape_setPosition(rect, (sfVector2f){570, (float)start * 300 / (len - 15) - ((float)start / (len - 15)) * 6000 / len + 20});
+			sfRectangleShape_setPosition(rect, (sfVector2f){570, (float)(300 * start * len - 6000 * start) / ((len - 15) * len) + 20});
 			sfRectangleShape_setSize(rect, (sfVector2f){10, 6000 / len + 1});
 			sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 255});
 			sfRenderWindow_drawRectangleShape(window, rect, NULL);
