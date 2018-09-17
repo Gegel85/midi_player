@@ -53,10 +53,12 @@ $(NAME):$(OBJ)
 
 clean:
 	$(MAKE) -C lib/midi_parser clean
+	$(MAKE) -C lib/concatf clean
 	$(RM) $(OBJ)
 
 fclean:	clean
 	$(MAKE) -C lib/midi_parser fclean
+	$(MAKE) -C lib/concatf fclean
 	$(RM) $(NAME) $(NAME).exe
 
 ffclean:fclean
