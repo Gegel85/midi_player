@@ -562,7 +562,7 @@ char	*convertUnicodeToString(sfUint32 *str, char *buffer)
 	return (buffer);
 }
 
-char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Sprite *sprites)
+char	*exploreFile(char *path, sfFont *font, Sprite *sprites)
 {
 	sfVideoMode	mode = {600, 400, 32};
 	sfRectangleShape*rect = sfRectangleShape_create();
@@ -586,6 +586,16 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 	sfText		*text = sfText_create();
 	int		leftButtonIsPressed = 0;
 
+	if (!window || !text || !rect) {
+		if (window)
+			sfRenderWindow_destroy(window);
+		if (rect)
+			sfRectangleShape_destroy(rect);
+		if (text)
+			sfText_destroy(text);
+		return (NULL);
+	}
+	sfRenderWindow_setFramerateLimit(window, 60);
 	sfText_setFont(text, font);
 	memset(displayedPath, 0, sizeof(displayedPath));
 	if (!realpath(path, realPath)) {
@@ -662,9 +672,7 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 						selectedText.x = 0;
 						selectedText.y = strlen_unicode(displayedPath);
 					}
-				} else if (event.mouseButton.x <= 20 || event.mouseButton.x >= 570 || event.mouseButton.y <= 20 || event.mouseButton.y >= 320)
-					menuSelected = -1;
-				else if (event.mouseButton.y <= 320) {
+				} else if (event.mouseButton.x > 20 && event.mouseButton.x < 570 && event.mouseButton.y > 20 && event.mouseButton.y < 320 && event.mouseButton.y < (len + 1) * 20) {
 					if (menuSelected == 0 && (int)((float)event.mouseButton.y / 20 + start - 1) == selected) {
 						displayedPath[0] = '\0';
 						if ((direntry[selected].stats.st_mode & S_IFMT) == S_IFDIR) {
@@ -719,7 +727,8 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 					menuSelected = 0;
 					selected = (float)event.mouseButton.y / 20 + start - 1;
 					convertStringToUnicode(direntry[selected].name, displayedPath);
-				}
+				} else
+					menuSelected = -1;
 			} else if (event.type == sfEvtTextEntered) {
 				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127) {
 					for (int i = selectedText.x > selectedText.y ? selectedText.y : selectedText.x; displayedPath[i + abs(selectedText.x - selectedText.y) - 1]; i++)
@@ -952,7 +961,6 @@ char	*exploreFile(char *path, char *fileType, char *typeDesc, sfFont *font, Spri
 							return (NULL);
 						}
 					} else {
-						path = concatf("%s/%s", realPath, direntry[selected].name);
 						for (len = 0; !direntry[len].isEnd; len++)
 							free(direntry[len].name);
 						free(direntry);
@@ -1249,7 +1257,7 @@ int	main(int argc, char **args)
 					lastPath[2] = '\0';
 				}
 			}
-			path = exploreFile(lastPath, ".mid", "Midi files", font, sprites);
+			path = exploreFile(lastPath, font, sprites);
 		} while (path && playFile(path, args[0], debug, window, sounds, soundBuffers, text));
 		if (path) {
 			for (int i = strlen(path) - 1; i >= 0; i--) {
