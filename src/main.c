@@ -1080,6 +1080,21 @@ char	*exploreFile(char *path, sfFont *font, Sprite *sprites)
 		sfText_setColor(text, (sfColor){0, 0, 0, 255});
 		sfText_setUnicodeString(text, convertStringToUnicode(realPath, bufferUnicode));
 		sfText_setPosition(text, (sfVector2f){10, 0});
+		sfRectangleShape_setPosition(rect, (sfVector2f){400, 330});
+		sfRectangleShape_setSize(rect, (sfVector2f){60, 30});
+		sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 255});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfText_setColor(text, (sfColor){0, 0, 0, 255});
+		sfText_setString(text, "Open");
+		sfText_setPosition(text, (sfVector2f){410, 335});
+		sfRenderWindow_drawText(window, text, NULL);
+		sfRectangleShape_setPosition(rect, (sfVector2f){470, 330});
+		sfRectangleShape_setSize(rect, (sfVector2f){60, 30});
+		sfRectangleShape_setFillColor(rect, (sfColor){255, 255, 255, 255});
+		sfRenderWindow_drawRectangleShape(window, rect, NULL);
+		sfText_setColor(text, (sfColor){0, 0, 0, 255});
+		sfText_setString(text, "Cancel");
+		sfText_setPosition(text, (sfVector2f){475, 335});
 		sfRenderWindow_drawText(window, text, NULL);
 		sfRenderWindow_display(window);
 	}
