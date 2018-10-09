@@ -16,10 +16,13 @@ INC =	-Iinclude			\
 
 CSFML = -lcsfml-audio		\
 	-lcsfml-graphics	\
-	-lcsfml-network		\
 	-lcsfml-system		\
 	-lcsfml-window		\
 
+SFML =	-lsfml-audio		\
+	-lsfml-graphics		\
+	-lsfml-system		\
+	-lsfml-window		\
 
 LDFLAGS =				\
 	-lm				\
@@ -69,7 +72,5 @@ dbg:	CFLAGS += -g -O0
 dbg:	RULE = dbg
 dbg:	fclean all
 
-epi:	CSFML = -lc_graph_prog
-epi:	CFLAGS += -g -O0
-epi:	RULE = dbg
-epi:	re
+sfml:	CSFML += $(SFML)
+sfml:	all
