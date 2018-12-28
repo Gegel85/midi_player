@@ -35,6 +35,7 @@
 *.i*86
 *.x86_64
 *.hex
+midi_player
 
 # Debug files
 *.dSYM/
@@ -56,3 +57,9 @@ dkms.conf
 
 # Saved path file
 lastPath
+
+# CLion config files
+.idea
+
+# CMake build path
+cmake-build-*
