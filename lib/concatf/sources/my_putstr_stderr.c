@@ -6,9 +6,10 @@
 */
 
 #include "concatf.h"
+#include <string.h>
 #include <unistd.h>
 
 int	my_putstr_stderr(char const *str)
 {
-	return (write(2, str, my_strlen_rec(str)));
+	return (write(2, str, strlen(str)));
 }

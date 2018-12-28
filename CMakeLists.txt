@@ -45,7 +45,8 @@ add_executable(
 	src/globals.c
 	src/main.c
 	src/sounds.c
-)
+	src/debug.c
+	src/unicode.c src/explore_file.c)
 
 target_link_libraries(
 	${PROJECT_NAME}

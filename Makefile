@@ -7,6 +7,9 @@ SRC = 	display_from_events.c	\
 	main.c			\
 	sounds.c		\
 	disp_msg.c		\
+	explore_file.c		\
+	unicode.c		\
+	debug.c			\
 
 OBJ =	$(SRC:%.c=src/%.o)
 
