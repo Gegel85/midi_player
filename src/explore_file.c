@@ -256,7 +256,7 @@ char	*exploreFile(char *path, sfFont *font, Sprite *sprites)
 				} else
 					menuSelected = -1;
 			} else if (event.type == sfEvtTextEntered) {
-				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127) {
+				if (event.text.unicode >= ' ' && strlen_unicode(displayedPath) < PATH_MAX - 1 && event.text.unicode != 127 && menuSelected == 1) {
 					for (int i = selectedText.x > selectedText.y ? selectedText.y : selectedText.x; displayedPath[i + abs(selectedText.x - selectedText.y) - 1]; i++)
 						displayedPath[i] = displayedPath[i + abs(selectedText.x - selectedText.y)];
 					for (int i = strlen_unicode(displayedPath); i >= (int)cursorPos; i--)
@@ -392,11 +392,11 @@ char	*exploreFile(char *path, sfFont *font, Sprite *sprites)
 						convertStringToUnicode(direntry[selected].name, displayedPath);
 					}
 				}
-					#ifndef sfKeyBackspace
+				#ifndef sfKeyBackspace
 				else if (event.key.code == sfKeyBack) {
-					#else
-					else if (event.key.code == sfKeyBackspace) {
-					#endif
+				#else
+				else if (event.key.code == sfKeyBackspace) {
+				#endif
 					if (menuSelected == 1 && selectedText.x != selectedText.y) {
 						for (int i = selectedText.x > selectedText.y ? selectedText.y : selectedText.x; displayedPath[i + abs(selectedText.x - selectedText.y) - 1]; i++)
 							displayedPath[i] = displayedPath[i + abs(selectedText.x - selectedText.y)];
@@ -417,11 +417,11 @@ char	*exploreFile(char *path, sfFont *font, Sprite *sprites)
 							displayedPath[i] = displayedPath[i + 1];
 					}
 				}
-					#ifndef sfKeyEnter
+				#ifndef sfKeyEnter
 				else if (event.key.code == sfKeyReturn) {
-					#else
-					else if (event.key.code == sfKeyEnter) {
-					#endif
+				#else
+				else if (event.key.code == sfKeyEnter) {
+				#endif
 					struct stat	stats;
 
 					if (menuSelected == 0) {
@@ -445,7 +445,8 @@ char	*exploreFile(char *path, sfFont *font, Sprite *sprites)
 							free(buf);
 							continue;
 						}
-					}
+					} else
+						continue;
 					if (!realpath(path, realPath)) {
 						free(path);
 						buf = concatf("Error: %s: %s\n", realPath, strerror(errno));

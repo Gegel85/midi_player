@@ -261,40 +261,37 @@ static	Settings	settings = {false, true, 50, PIANO, false, 0};
 				}
 			}
 		}
-		//if (sfRenderWindow_hasFocus(window)) {
-		        nbOfNotesDisplayed = 0;
-			sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
-			if (!settings.dontDisplay) {
-				for (int i = 0; i < result->nbOfTracks; i++)
-					displayNotesFromNotesList(&result->tracks[i], state.begin[i], &state, data.rect, window, debug, &nbOfNotesDisplayed);
-			}
-			displayPianoKeys(state.playingNotes, data.rect, window);
-			if (settings.displayHUD) {
-				sprintf(buffer,
-					"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\nCurrent instrument: %s\n\n\nControls:%s\n",
-					1 / seconds,
-					state.elapsedTicks,
-					state.midiClockTicks,
-					settings.speed,
-					state.tempoInfos.tempo,
-					state.tempoInfos.signature.ticksPerQuarterNote * 128,
-					nbOfNotesDisplayed,
-					state.notesPlayed,
-					result->nbOfNotes,
-					960 * 100 / frect.height,
-					settings.volume,
-					settings.instrument == PIANO ? "Piano" :
-					settings.instrument == SQUARE ? "Square wave" :
-					settings.instrument == SINUSOIDE ? "Sin wave" :
-					settings.instrument == SAWTOOTH ? "Sawtooth wave" : "Error",
-					CONTROLS
-				);
-				sfText_setString(data.text, buffer);
-				sfRenderWindow_drawText(window, text, NULL);
-			}
-			sfRenderWindow_display(window);
-		//} else
-		//	nanosleep((struct timespec[1]){{0, 6666667}}, NULL);
+		nbOfNotesDisplayed = 0;
+		sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
+		if (!settings.dontDisplay) {
+			for (int i = 0; i < result->nbOfTracks; i++)
+				displayNotesFromNotesList(&result->tracks[i], state.begin[i], &state, data.rect, window, debug, &nbOfNotesDisplayed);
+		}
+		displayPianoKeys(state.playingNotes, data.rect, window);
+		if (settings.displayHUD) {
+			sprintf(buffer,
+				"%.3f FPS\nTicks %.3f\nMidiclock ticks: %.3f\nSpeed: %.3f\nMicroseconds / clock tick: %i\nClock ticks / second: %i\nNotes on screen: %i\nNotes played: %u/%u\nZoom level: %.3f%%\nVolume: %u%%\nCurrent instrument: %s\n\n\nControls:%s\n",
+				1 / seconds,
+				state.elapsedTicks,
+				state.midiClockTicks,
+				settings.speed,
+				state.tempoInfos.tempo,
+				state.tempoInfos.signature.ticksPerQuarterNote * 128,
+				nbOfNotesDisplayed,
+				state.notesPlayed,
+				result->nbOfNotes,
+				960 * 100 / frect.height,
+				settings.volume,
+				settings.instrument == PIANO ? "Piano" :
+				settings.instrument == SQUARE ? "Square wave" :
+				settings.instrument == SINUSOIDE ? "Sin wave" :
+				settings.instrument == SAWTOOTH ? "Sawtooth wave" : "Error",
+				CONTROLS
+			);
+			sfText_setString(data.text, buffer);
+			sfRenderWindow_drawText(window, text, NULL);
+		}
+		sfRenderWindow_display(window);
 		if (!debug && noEventsLeft(state.events, result->nbOfTracks))
 			isEnd = true;
         }
