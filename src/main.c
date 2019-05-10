@@ -5,6 +5,7 @@
 #include <SFML/Audio.h>
 #include <math.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <time.h>
 #include <dirent.h>
 #include <limits.h>
@@ -72,15 +73,13 @@ char	*realpath(char *path, char *buffer)
 
 bool	noEventsLeft(Event **events, int nbOfTracks)
 {
-	for (int i = 0; i < nbOfTracks; i++) {
-		if (events[i]->infos || events[i]->type) {
+	for (int i = 0; i < nbOfTracks; i++)
+		if (events[i]->infos || events[i]->type)
 			return (false);
-		}
-	}
 	return (true);
 }
 
-bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow *window, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], sfText *text)
+bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow *window, PlayingSound sounds[MAX_SOUNDS], SoundBuffer soundBuffers[MAX_BUFFERS], sfText *text)
 {
 	sfEvent		event;
 	sfView		*view = sfView_createFromRect(frect);
@@ -91,8 +90,8 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 	struct	data_s	data;
 	char		buffer[1000];
 	int		nbOfNotesDisplayed;
-	exec_state_t	state;
-static	settings_t	settings = {false, true, 50, PIANO, false, 0};
+	State	state;
+static	Settings	settings = {false, true, 50, PIANO, false, 0};
 	sfThread	*thread;
 
 	sfText_setColor(text, (sfColor){255, 255, 255, 255});
@@ -109,6 +108,7 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 	settings.go = !debug;
 	settings.speed = (float)result->ticks / 1000;
 	state.nbOfTracks = result->nbOfTracks;
+	state.sounds = sounds;
 	data.settings = &settings;
 	data.execState = &state;
 	data.parserResult = result;
@@ -116,6 +116,7 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 	data.text = text;
 	data.clock = sfClock_create();
 	data.sounds = sounds;
+	data.buffers = soundBuffers;
 	sfRectangleShape_setOutlineColor(data.rect, (sfColor){0, 0, 0, 255});
 	sfRectangleShape_setOutlineThickness(data.rect, 2);
 	state.tempoInfos.signature.ticksPerQuarterNote = 24;
@@ -152,65 +153,53 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 					isEnd = true;
 				else if (event.key.code == sfKeyU && settings.instrument != PIANO) {
 					settings.instrument = PIANO;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sounds[i][j] = NULL;
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-							soundBuffers[i][j] = NULL;
-						}
+					for (int j = 0; j < MAX_BUFFERS; j++) {
+						sfSoundBuffer_destroy(soundBuffers[j].buffer);
+						soundBuffers[j].buffer = NULL;
+					}
 					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, PIANO);
 					data.loading = false;
 					sfClock_restart(data.clock);
 				} else if (event.key.code == sfKeyI && settings.instrument != SQUARE) {
 					settings.instrument = SQUARE;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sounds[i][j] = NULL;
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-							soundBuffers[i][j] = NULL;
-						}
+					for (int j = 0; j < MAX_BUFFERS; j++) {
+						sfSoundBuffer_destroy(soundBuffers[j].buffer);
+						soundBuffers[j].buffer = NULL;
+					}
 					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, SQUARE);
 					data.loading = false;
 					sfClock_restart(clock);
 				} else if (event.key.code == sfKeyO && settings.instrument != SINUSOIDE) {
 					settings.instrument = SINUSOIDE;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sounds[i][j] = NULL;
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-							soundBuffers[i][j] = NULL;
-						}
+					for (int j = 0; j < MAX_BUFFERS; j++) {
+						sfSoundBuffer_destroy(soundBuffers[j].buffer);
+						soundBuffers[j].buffer = NULL;
+					}
 					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, SINUSOIDE);
 					data.loading = false;
 					sfClock_restart(clock);
 				} else if (event.key.code == sfKeyP && settings.instrument != SAWTOOTH) {
 					settings.instrument = SAWTOOTH;
-					for (int i = 0; i < 2; i++)
-						for (int j = 0; j < 128; j++) {
-							sfSound_destroy(sounds[i][j]);
-							sounds[i][j] = NULL;
-							sfSoundBuffer_destroy(soundBuffers[i][j]);
-							soundBuffers[i][j] = NULL;
-						}
+					for (int j = 0; j < MAX_BUFFERS; j++) {
+						sfSoundBuffer_destroy(soundBuffers[j].buffer);
+						soundBuffers[j].buffer = NULL;
+					}
 					data.loading = true;
 					loadSounds(progPath, sounds, soundBuffers, debug, SAWTOOTH);
 					data.loading = false;
 					sfClock_restart(clock);
 				} else if (!settings.go && event.key.code == sfKeyRight) {
 					state.elapsedTicks += 100 * settings.speed;
-					updateEvents(&state, sounds, debug, 100, settings.volume, result);
+					updateEvents(&state, debug, data.buffers, 100, result);
 				} else if (event.key.code == sfKeyW)
 					settings.displayHUD = !settings.displayHUD;
 				else if (event.key.code == sfKeyLeft) {
 					state.elapsedTicks -= 100 * settings.speed;
-					for (int i = 0; i < 16; i++)
-						for (int j = 0; j < 128; j++)
+					for (int i = 0; i < MAX_CHANNELS; i++)
+						for (int j = 0; j < MAX_BUFFERS; j++)
 							state.playingNotes[i][j] = 0;
 					for (int i = 0; i < result->nbOfTracks; i++) {
 						state.bufferedTicks[i] = state.elapsedTicks - 100;
@@ -248,7 +237,7 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 					sfText_setPosition(data.text, (sfVector2f){0, frect.top});
 					sfText_setScale(data.text, (sfVector2f){1, frect.height / 960});
 				} else if (event.key.code == sfKeyHome) {
-					for (int i = 0; i < 16; i++)
+					for (int i = 0; i < MAX_CHANNELS; i++)
 						memset(state.playingNotes[i], 0, sizeof(state.playingNotes[i]));
 					state.elapsedTicks = 0;
 					state.notesPlayed = 0;
@@ -309,7 +298,7 @@ static	settings_t	settings = {false, true, 50, PIANO, false, 0};
 	return (returnValue);
 }
 
-bool	playFile(char *path, char *progPath, bool debug, sfRenderWindow *window, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], sfText *text)
+bool	playFile(char *path, char *progPath, bool debug, sfRenderWindow *window, PlayingSound *sounds, SoundBuffer configs[MAX_BUFFERS], sfText *text)
 {
 	MidiParser	*result;
 
@@ -324,85 +313,11 @@ bool	playFile(char *path, char *progPath, bool debug, sfRenderWindow *window, sf
 			printf("division: %i FPS and %i ticks/frame\n", result->fps, result->ticks);
 		} else
 			printf("division: %i ticks / 1/4 note\n", result->ticks);
-		if (!displayMidi(progPath, result, debug, window, sounds, soundBuffers, text))
+		if (!displayMidi(progPath, result, debug, window, sounds, configs, text))
 			return false;
 		deleteMidiParserStruct(result);
 	}
 	return (true);
-}
-
-Sprite	*loadConfig(char *path)
-{
-	Sprite	*array = malloc(sizeof(*array));
-	int	len = 1;
-	bool	found = false;
-	void	*buff;
-	char	buffer[PATH_MAX];
-
-	memset(array, 0, sizeof(*array));
-	for (int i = 0; ; i++) {
-		found = false;
-		if (!configs[i].extension) {
-			array[len - 1].path = configs[i].path;
-			array[len - 1].sprite = sfSprite_create();
-			sprintf(buffer, "%s%s", path, configs[i].path);
-			array[len - 1].texture = sfTexture_createFromFile(buffer, NULL);
-			array[len - 1].extensions = NULL;
-			array[len - 1].nbOfExtensions = 0;
-			sfSprite_setTexture(array[len - 1].sprite, array[len - 1].texture, sfFalse);
-			break;
-		} else
-			for (int j = 0; j < len - 1; j++) {
-				if (strcmp(array[j].path, configs[i].path) == 0) {
-					found = true;
-					buff = realloc(array[j].extensions, ++array[j].nbOfExtensions * sizeof(*array[j].extensions));
-					if (!buff) {
-						for (int j = 0; j < len; i++) {
-							sfSprite_destroy(array[i].sprite);
-							sfTexture_destroy(array[i].texture);
-							free(array[i].extensions);
-						}
-						free(array);
-						return (NULL);
-					}
-					array[j].extensions = buff;
-					array[j].extensions[array[j].nbOfExtensions - 1] = configs[i].extension;
-					break;
-				}
-			}
-		if (!found) {
-			buff = realloc(array, ++len * sizeof(*array));
-			if (!buff) {
-				for (int j = 0; j < len - 1; i++) {
-					sfSprite_destroy(array[i].sprite);
-					sfTexture_destroy(array[i].texture);
-					free(array[i].extensions);
-				}
-				free(array);
-				return (NULL);
-			}
-			array = buff;
-			array[len - 2].path = configs[i].path;
-			array[len - 2].sprite = sfSprite_create();
-			sprintf(buffer, "%s%s", path, configs[i].path);
-			array[len - 2].texture = sfTexture_createFromFile(buffer, NULL);
-			array[len - 2].extensions = malloc(sizeof(*array[len - 2].extensions));
-			array[len - 2].nbOfExtensions = 1;
-			if (!array[len - 2].extensions) {
-				for (int j = 0; j < len - 1; i++) {
-					sfSprite_destroy(array[i].sprite);
-					sfTexture_destroy(array[i].texture);
-					free(array[i].extensions);
-				}
-				free(array);
-				return (NULL);
-			}
-			*array[len - 2].extensions = configs[i].extension;
-			sfSprite_setTexture(array[len - 2].sprite, array[len - 2].texture, sfFalse);
-			memset(&array[len - 1], 0, sizeof(*array));
-		}
-	}
-	return (array);
 }
 
 char	*loadFile(char *path)
@@ -435,8 +350,8 @@ int	main(int argc, char **args)
 	sfRenderWindow	*window;
 	bool		debug = argc > 1 && (strcmp(args[1], "debug") == 0 || strcmp(args[1], "ddebug") == 0);
 	sfText		*text = sfText_create();
-	sfSound		***sounds;
-	sfSoundBuffer	*soundBuffers[2][128];
+	PlayingSound	sounds[MAX_SOUNDS];
+	SoundBuffer	configs[MAX_BUFFERS];
 	sfFont		*font;
 	sfVideoMode	mode = {1280, 960, 32};
 	char		*buffer;
@@ -448,13 +363,6 @@ int	main(int argc, char **args)
 		signal(SIGSEGV, sighandler);
 		signal(SIGABRT, sighandler);
 	#endif
-	sounds = malloc(sizeof(*sounds) * 2);
-	if (!sounds)
-		return EXIT_FAILURE;
-	*sounds = malloc(sizeof(**sounds) * 2 * 128);
-	if (!*sounds)
-		return EXIT_FAILURE;
-	sounds[1] = *sounds + 128;
 	window = sfRenderWindow_create(mode, args[0], sfClose | sfResize, NULL);
 	sfRenderWindow_setFramerateLimit(window, 60);
 	for (int i = strlen(args[0]) - 1; i >= 0; i--)
@@ -480,7 +388,7 @@ int	main(int argc, char **args)
 	sfRenderWindow_clear(window, (sfColor){50, 155, 155, 255});
 	sfRenderWindow_drawText(window, text, NULL);
 	sfRenderWindow_display(window);
-	loadSounds(args[0], sounds, soundBuffers, debug, PIANO);
+	loadSounds(args[0], sounds, configs, debug, PIANO);
 	sprintf(buffer, "%slastPath", args[0]);
 	if (argc == 1 || (argc == 2 && strcmp(args[1], "debug") == 0)) {
 		path = loadFile(buffer) ?: strdup(args[0]);
@@ -498,7 +406,7 @@ int	main(int argc, char **args)
 				}
 			}
 			path = exploreFile(lastPath, font, sprites);
-		} while (path && playFile(path, args[0], debug, window, sounds, soundBuffers, text));
+		} while (path && playFile(path, args[0], debug, window, sounds, configs, text));
 		if (path) {
 			for (int i = strlen(path) - 1; i >= 0; i--) {
 				if (path[i] == '/' || path[i] == '\\') {
@@ -530,16 +438,16 @@ int	main(int argc, char **args)
 		printf("Play list contains:\n");
 		for (int i = 1 + debug; i < argc; i++)
 			printf("- %s\n", args[i]);
-		for (int i = 1 + debug; i < argc && playFile(args[i], args[0], debug, window, sounds, soundBuffers, text); i++);
+		for (int i = 1 + debug; i < argc && playFile(args[i], args[0], debug, window, sounds, configs, text); i++);
 	}
 	sfRenderWindow_destroy(window);
 	sfFont_destroy(font);
 	sfText_destroy(text);
-	for (int i = 0; i < 2; i++)
-		for (int j = 0; j < 128; j++) {
-			sfSound_destroy(sounds[i][j]);
-			sfSoundBuffer_destroy(soundBuffers[i][j]);
-		}
+	for (int i = 0; i < MAX_SOUNDS; i++)
+		sfSound_destroy(sounds[i].sound);
+	for (int j = 0; j < MAX_BUFFERS; j++)
+		if (configs[j].pitch == 1)
+			sfSoundBuffer_destroy(configs[j].buffer);
 	free(buffer);
 	return (EXIT_SUCCESS);
 }

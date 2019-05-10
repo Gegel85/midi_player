@@ -34,8 +34,9 @@ float	getPosForNote(unsigned char pitch)
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6 - 6);
 	case 11:
 		return (pitch / 12 * NOTE_STEP * 7 + NOTE_STEP * 6 + 1);
+	default:
+		return (pitch / 12 * NOTE_STEP * 7);
 	}
-	return (pitch / 12 * NOTE_STEP * 7);
 }
 
 void	displayNote(unsigned char channel, unsigned char pitch, double startTime, double currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug)
@@ -79,7 +80,35 @@ void	displayNote(unsigned char channel, unsigned char pitch, double startTime, d
 	}
 }
 
-void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result)
+void	playSound(State *state, SoundBuffer *buffer, MidiNote *note)
+{
+	int start = state->currentSound;
+
+	if (!buffer->buffer)
+		return (void)printf("No buffer !\n");
+
+	while (!state->sounds[state->currentSound].sound) {
+		state->currentSound++;
+		state->currentSound %= MAX_SOUNDS;
+		if (state->currentSound == start)
+			return (void)printf("None found\n");
+	}
+
+	state->sounds[state->currentSound].released = false;
+	state->sounds[state->currentSound].pitch = note->pitch;
+	state->sounds[state->currentSound].channel = note->channel;
+	state->sounds[state->currentSound].volume = note->velocity * 65535 / 127;
+	state->sounds[state->currentSound].fadeSpeed = 0;
+	sfSound_stop(state->sounds[state->currentSound].sound);
+	sfSound_setBuffer(state->sounds[state->currentSound].sound, buffer->buffer);
+	sfSound_setPitch(state->sounds[state->currentSound].sound, buffer->pitch);
+	sfSound_setVolume(state->sounds[state->currentSound].sound, note->velocity * 65535 / 127);
+	sfSound_play(state->sounds[state->currentSound].sound);
+	state->currentSound++;
+	state->currentSound %= MAX_SOUNDS;
+}
+
+void	updateEvents(State *state, bool debug, SoundBuffer *soundBuffers, double time, MidiParser *result)
 {
 	for (unsigned int i = 0; i < state->nbOfTracks; i++)
 		state->bufferedTicks[i] += time;
@@ -98,26 +127,24 @@ void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double tim
 		while ((state->events[i]->infos || state->events[i]->type) && state->events[i]->timeToAppear < state->bufferedTicks[i]) {
 			state->bufferedTicks[i] -= state->events[i]->timeToAppear;
 			if (state->events[i]->type == MidiNotePressed) {
-				state->playingNotes[((MidiNote *)state->events[i]->infos)->channel][((MidiNote *)state->events[i]->infos)->pitch]++;
-				if (sounds[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch]) {
-					if (debug)
-						printf("Playing note %s on channel %i\n", getNoteString(((MidiNote *)state->events[i]->infos)->pitch), ((MidiNote *)state->events[i]->infos)->channel);
-					sfSound_setVolume(sounds[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch], (float)((MidiNote *)state->events[i]->infos)->velocity * volume / 127);
-					sfSound_play(sounds[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch]);
-					state->fadeSpeed[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch] = 0;
-					state->notesVolume[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch] = ((MidiNote *)state->events[i]->infos)->velocity * 65535 / 127;
-				}
+				MidiNote *note = state->events[i]->infos;
+
+				if (debug)
+					printf("Playing note %s on channel %i\n", getNoteString(note->pitch), note->channel);
+				state->playingNotes[note->channel][note->pitch]++;
+				playSound(state, &soundBuffers[note->pitch], note);
 				state->notesPlayed++;
 			} else if (state->events[i]->type == MidiNoteReleased) {
-				if (state->playingNotes[((MidiNote *)state->events[i]->infos)->channel][((MidiNote *)state->events[i]->infos)->pitch] > 0)
-					state->playingNotes[((MidiNote *)state->events[i]->infos)->channel][((MidiNote *)state->events[i]->infos)->pitch]--;
-				if (!state->playingNotes[((MidiNote *)state->events[i]->infos)->channel][((MidiNote *)state->events[i]->infos)->pitch] &&
-				    sounds[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch]) {
-					for (int k = ((MidiNote *)state->events[i]->infos)->channel % 2; k < 18; k += 2)
-						if (k >= 16)
-							state->fadeSpeed[((MidiNote *)state->events[i]->infos)->channel % 2][((MidiNote *)state->events[i]->infos)->pitch] = -1;
-						else if (state->playingNotes[k][((MidiNote *)state->events[i]->infos)->pitch])
+				MidiNote *note = state->events[i]->infos;
+
+				if (state->playingNotes[note->channel][note->pitch] > 0) {
+					state->playingNotes[note->channel][note->pitch]--;
+					for (int j = state->currentSound; j != (state->currentSound - 1 + MAX_SOUNDS) % MAX_SOUNDS; j = (j + 1) % MAX_SOUNDS)
+						if (state->sounds[j].sound && !state->sounds[j].released && state->sounds[j].pitch == note->pitch && state->sounds[j].channel == note->channel) {
+							state->sounds[i].fadeSpeed = -1;
+							state->sounds[i].released = true;
 							break;
+						}
 				}
 			} else if (state->events[i]->type == MidiTempoChanged)
 				state->tempoInfos.tempo = *(int *)state->events[i]->infos;
@@ -130,21 +157,20 @@ void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double tim
 		printf("\n");
 }
 
-void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, double time)
+void	updateSounds(State *state, unsigned char volume, double time)
 {
-	for (int i = 0; i < 2; i++)
-		for (int j = 0; j < 128; j++) {
-			if (!sounds[i][j])
-				break;
-			if (state->notesVolume[i][j] >= state->fadeSpeed[i][j] * time * 516)
-				state->notesVolume[i][j] -= state->fadeSpeed[i][j] * time * 516;
-			else
-				state->notesVolume[i][j] = 0;
-			if (state->notesVolume[i][j])
-				sfSound_setVolume(sounds[i][j], (float)state->notesVolume[i][j] * volume / 65535);
-			else
-				sfSound_stop(sounds[i][j]);
-		}
+	for (int j = 0; j < MAX_SOUNDS; j++) {
+		if (!state->sounds[j].sound)
+			continue;
+		if (state->sounds[j].volume >= state->sounds[j].fadeSpeed * time * 516)
+			state->sounds[j].volume -= state->sounds[j].fadeSpeed * time * 516;
+		else
+			state->sounds[j].volume = 0;
+		if (state->sounds[j].volume)
+			sfSound_setVolume(state->sounds[j].sound, (float)state->sounds[j].volume * volume / 65535);
+		else
+			sfSound_stop(state->sounds[j].sound);
+	}
 }
 
 void	ThreadFunc(void *args)
@@ -160,9 +186,9 @@ void	ThreadFunc(void *args)
 		if (data->settings->go) {
 			data->execState->elapsedTicks += time;
 			data->execState->midiClockTicks += 128 * data->execState->tempoInfos.signature.ticksPerQuarterNote * seconds;
-			updateEvents(data->execState, data->sounds, data->debug, time, data->settings->volume, data->parserResult);
+			updateEvents(data->execState, data->debug, data->buffers, time, data->parserResult);
 		}
-		updateSounds(data->sounds, data->execState, data->settings->volume, seconds);
+		updateSounds(data->execState, data->settings->volume, seconds);
 		while (data->loading) {
 			sfClock_restart(data->clock);
 			nanosleep((struct timespec[1]){{0, 6666667}}, NULL);

@@ -12,6 +12,80 @@
 #include <time.h>
 #include <ctype.h>
 
+Sprite	*loadConfig(char *path)
+{
+	Sprite	*array = malloc(sizeof(*array));
+	int	len = 1;
+	bool	found = false;
+	void	*buff;
+	char	buffer[PATH_MAX];
+
+	memset(array, 0, sizeof(*array));
+	for (int i = 0; ; i++) {
+		found = false;
+		if (!configs[i].extension) {
+			array[len - 1].path = configs[i].path;
+			array[len - 1].sprite = sfSprite_create();
+			sprintf(buffer, "%s%s", path, configs[i].path);
+			array[len - 1].texture = sfTexture_createFromFile(buffer, NULL);
+			array[len - 1].extensions = NULL;
+			array[len - 1].nbOfExtensions = 0;
+			sfSprite_setTexture(array[len - 1].sprite, array[len - 1].texture, sfFalse);
+			break;
+		} else
+			for (int j = 0; j < len - 1; j++) {
+				if (strcmp(array[j].path, configs[i].path) == 0) {
+					found = true;
+					buff = realloc(array[j].extensions, ++array[j].nbOfExtensions * sizeof(*array[j].extensions));
+					if (!buff) {
+						for (int j = 0; j < len; i++) {
+							sfSprite_destroy(array[i].sprite);
+							sfTexture_destroy(array[i].texture);
+							free(array[i].extensions);
+						}
+						free(array);
+						return (NULL);
+					}
+					array[j].extensions = buff;
+					array[j].extensions[array[j].nbOfExtensions - 1] = configs[i].extension;
+					break;
+				}
+			}
+		if (!found) {
+			buff = realloc(array, ++len * sizeof(*array));
+			if (!buff) {
+				for (int j = 0; j < len - 1; i++) {
+					sfSprite_destroy(array[i].sprite);
+					sfTexture_destroy(array[i].texture);
+					free(array[i].extensions);
+				}
+				free(array);
+				return (NULL);
+			}
+			array = buff;
+			array[len - 2].path = configs[i].path;
+			array[len - 2].sprite = sfSprite_create();
+			sprintf(buffer, "%s%s", path, configs[i].path);
+			array[len - 2].texture = sfTexture_createFromFile(buffer, NULL);
+			array[len - 2].extensions = malloc(sizeof(*array[len - 2].extensions));
+			array[len - 2].nbOfExtensions = 1;
+			if (!array[len - 2].extensions) {
+				for (int j = 0; j < len - 1; i++) {
+					sfSprite_destroy(array[i].sprite);
+					sfTexture_destroy(array[i].texture);
+					free(array[i].extensions);
+				}
+				free(array);
+				return (NULL);
+			}
+			*array[len - 2].extensions = configs[i].extension;
+			sfSprite_setTexture(array[len - 2].sprite, array[len - 2].texture, sfFalse);
+			memset(&array[len - 1], 0, sizeof(*array));
+		}
+	}
+	return (array);
+}
+
 int	my_strcmp(char *str1, char *str2)
 {
 	for (int i = 0; str1[i]; i++)

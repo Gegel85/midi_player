@@ -3,7 +3,7 @@
 
 sfFloatRect	frect = {0, 0, 1280, 960};
 
-const sfColor	channelColors[16] = {
+const sfColor	channelColors[MAX_CHANNELS] = {
 	{255, 0  , 0  , 255},
 	{0  , 0  , 255, 255},
 	{0  , 255, 0  , 255},

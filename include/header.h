@@ -1,4 +1,7 @@
 #define NOTE_STEP (float)1280 / 75
+#define MAX_SOUNDS 256
+#define MAX_BUFFERS 128
+#define MAX_CHANNELS 16
 #define CONTROLS "\n\
 Space: Pause/Unpause\n\
 PageUp: Volume Up\n\
@@ -24,7 +27,7 @@ P: Change instrument to Sawtooth wave"
 #include <stdbool.h>
 #include "midi_parser.h"
 
-extern const sfColor	channelColors[16];
+extern const sfColor	channelColors[MAX_CHANNELS];
 
 typedef struct {
 	int			tempo;
@@ -46,12 +49,19 @@ typedef struct {
 	Instrument	instrument;
 	bool		go;
 	double		speed;
-} settings_t;
+} Settings;
 
 typedef struct {
-	char		playingNotes[16][128];
-	unsigned short	notesVolume[2][128];
-	unsigned char	fadeSpeed[2][128];
+	sfSound	*sound;
+	double	volume;
+	int	pitch;
+	int	channel;
+	int	fadeSpeed;
+	bool	released;
+} PlayingSound;
+
+typedef struct {
+	char		playingNotes[MAX_CHANNELS][MAX_BUFFERS];
 	double		elapsedTicks;
 	unsigned int	nbOfTracks;
 	double		*bufferedTicks;
@@ -60,22 +70,9 @@ typedef struct {
 	double		midiClockTicks;
 	unsigned int	notesPlayed;
 	int		*begin;
-} exec_state_t;
-
-struct data_s {
-	sfRenderWindow	*window;
-	settings_t	*settings;
-	exec_state_t	*execState;
-	MidiParser	*parserResult;
-	sfRectangleShape*rect;
-	sfText		*text;
-	sfView		*view;
-	bool		debug;
-	bool		loading;
-	bool		leave;
-	sfSound		***sounds;
-	sfClock		*clock;
-};
+	PlayingSound	*sounds;
+	int		currentSound;
+} State;
 
 typedef struct {
 	sfSprite	*sprite;
@@ -96,23 +93,45 @@ typedef struct {
 	char	*extension;
 } Sprite_config;
 
+typedef struct {
+	sfSoundBuffer	*buffer;
+	double		pitch;
+} SoundBuffer;
+
+struct data_s {
+	sfRenderWindow	*window;
+	Settings	*settings;
+	State		*execState;
+	MidiParser	*parserResult;
+	sfRectangleShape*rect;
+	sfText		*text;
+	sfView		*view;
+	bool		debug;
+	bool		loading;
+	bool		leave;
+	SoundBuffer	*buffers;
+	PlayingSound	*sounds;
+	sfClock		*clock;
+};
+
 extern		sfFloatRect	frect;
 extern	const	Sprite_config	configs[];
 
+Sprite	*loadConfig(char *path);
 void	ThreadFunc(void *args);
 char	*getEventString(Event *event);
 int	dispMsg(char *title, char *content, int variate);
 char	*getMidiEventTypeString(EventType type);
 NoteList	eventsToNotes(MidiParser *result);
 bool    noEventsLeft(Event **events, int nbOfTracks);
-void	displayPianoKeys(char playingNotes[16][128], sfRectangleShape *rec, sfRenderWindow *win);
+void	displayPianoKeys(char playingNotes[MAX_CHANNELS][128], sfRectangleShape *rec, sfRenderWindow *win);
 char	*exploreFile(char *path, sfFont *font, Sprite *sprites);
 size_t	strlen_unicode(sfUint32 *str);
 sfUint32*convertStringToUnicode(unsigned char *str, sfUint32 *buffer);
 size_t	calcStringLen(sfUint32 *str);
 char	*convertUnicodeToString(sfUint32 *str, char *buffer);
-void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, double time);
-void	loadSounds(char *path, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument);
-void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result);
+void	updateSounds(State *state, unsigned char volume, double time);
+void	loadSounds(char *path, PlayingSound *sounds, SoundBuffer *soundBuffers, bool debug, Instrument instrument);
+void	updateEvents(State *state, bool debug, SoundBuffer *soundBuffers, double time, MidiParser *result);
 void	displayNote(unsigned char channel, unsigned char pitch, double startTime, double currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug);
-void	displayNotesFromNotesList(Track *track, int begin, exec_state_t *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);
+void	displayNotesFromNotesList(Track *track, int begin, State *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);

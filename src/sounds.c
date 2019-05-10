@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include "header.h"
 
 #define SAMPLE_COUNTS	44100 * 4
@@ -13,12 +14,12 @@ double	getNoteFrequency(char note)
 	return (pow(2, (double)(note - 69) / 12.0) * 440);
 }
 
-int	findClosestBuffer(sfSoundBuffer *buffers[128], int startIndex)
+int	findClosestBuffer(SoundBuffer buffers[MAX_BUFFERS], int startIndex)
 {
-	for (int i = 0; startIndex + i < 128 || startIndex - i >= 0; i++) {
-		if (startIndex + i < 128 && buffers[startIndex + i])
+	for (int i = 0; startIndex + i < MAX_BUFFERS || startIndex - i >= 0; i++) {
+		if (startIndex + i < MAX_BUFFERS && buffers[startIndex + i].buffer)
 			return (startIndex + i);
-		if (startIndex - i >= 0 && buffers[startIndex - i])
+		if (startIndex - i >= 0 && buffers[startIndex - i].buffer)
 			return (startIndex - i);
 	}
 	return (-1);
@@ -51,81 +52,58 @@ sfInt16	*createSawtoothSample(double frequency)
 	return (raw);
 }
 
-void	loadSounds(char *path, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument)
+void	loadSounds(char *path, PlayingSound *sounds, SoundBuffer *soundBuffers, bool debug, Instrument instrument)
 {
 	char		buffer[1024];
 	char		*note;
-	double		pitch[128];
-	sfSoundBuffer	*buffers[128];
+	SoundBuffer	buffers[MAX_BUFFERS];
 
-	for (int i = 0; i < 2; i++)
-		for (int j = 0; j < 128; j++) {
-			sounds[i][j] = NULL;
-			soundBuffers[i][j] = NULL;
-		}
-	memset(pitch, 0, sizeof(pitch));
-	for (int j = 0; j < 128; j++) {
+	for (int j = 0; j < MAX_BUFFERS; j++) {
 		switch (instrument) {
 		case PIANO:
 			note = getNoteString(j);
 			note[0] += 'a' - 'A';
 			sprintf(buffer, "%ssounds/Grand Piano4/%smmell.wav", path, note);
-			soundBuffers[0][j] = sfSoundBuffer_createFromFile(buffer);
+			soundBuffers[j].buffer = sfSoundBuffer_createFromFile(buffer);
 			break;
 		case SQUARE:
-			soundBuffers[0][j] = sfSoundBuffer_createFromSamples(createSquareSample(getNoteFrequency(j)), SAMPLE_COUNTS, 1, SAMPLE_RATE);
+			soundBuffers[j].buffer = sfSoundBuffer_createFromSamples(createSquareSample(getNoteFrequency(j)), SAMPLE_COUNTS, 1, SAMPLE_RATE);
 			break;
 		case SINUSOIDE:
-			soundBuffers[0][j] = sfSoundBuffer_createFromSamples(createSinSample(getNoteFrequency(j)), SAMPLE_COUNTS, 1, SAMPLE_RATE);
+			soundBuffers[j].buffer = sfSoundBuffer_createFromSamples(createSinSample(getNoteFrequency(j)), SAMPLE_COUNTS, 1, SAMPLE_RATE);
 			break;
 		case SAWTOOTH:
-			soundBuffers[0][j] = sfSoundBuffer_createFromSamples(createSawtoothSample(getNoteFrequency(j)), SAMPLE_COUNTS, 1, SAMPLE_RATE);
+			soundBuffers[j].buffer = sfSoundBuffer_createFromSamples(createSawtoothSample(getNoteFrequency(j)), SAMPLE_COUNTS, 1, SAMPLE_RATE);
 		}
-		if (soundBuffers[0][j]) {
-			sounds[0][j] = sfSound_create();
-			if (sounds[0][j])
-				sfSound_setBuffer(sounds[0][j], soundBuffers[0][j]);
-		} else
-			sounds[0][j] = NULL;
 	}
-	for (int i = 0; i < 128; i++)
-		buffers[i] = soundBuffers[0][i];
-	for (int j = 0, i = 0; j < 128; j++) {
-		if (!soundBuffers[0][j]) {
+
+	for (int i = 0; i < MAX_BUFFERS; i++)
+		buffers[i] = soundBuffers[i];
+
+	for (int j = 0, i = 0; j < MAX_BUFFERS; j++) {
+		if (!soundBuffers[j].buffer) {
 			i = findClosestBuffer(buffers, j);
 			if (i < 0) {
 				printf("No sound could be loaded\n");
 				return;
 			}
-			soundBuffers[0][j] = sfSoundBuffer_copy(soundBuffers[0][i]);
-			if (soundBuffers[0][j]) {
-				sounds[0][j] = sfSound_create();
-				if (sounds[0][j]) {
-					sfSound_setBuffer(sounds[0][j], soundBuffers[0][j]);
-					sfSound_setPitch(sounds[0][j], getNoteFrequency(j) / getNoteFrequency(i));
-					pitch[j] = getNoteFrequency(j) / getNoteFrequency(i);
-					if (debug)printf("Creating %i from %i (Ratio: %f)\n", j, i, pitch[j]);
-				}
-			}
-		}
+			soundBuffers[j] = buffers[i];
+			soundBuffers[j].pitch = getNoteFrequency(j) / getNoteFrequency(i);
+		} else
+			soundBuffers[j].pitch = 1;
 	}
-	for (int j = 0; j < 128; j++) {
-		soundBuffers[1][j] = soundBuffers[0][j] ? sfSoundBuffer_copy(soundBuffers[0][j]) : NULL;
-		if (soundBuffers[0][j]) {
-			sounds[1][j] = sfSound_create();
-			if (sounds[1][j])
-				sfSound_setBuffer(sounds[1][j], soundBuffers[0][j]);
-			if (pitch[j])
-				sfSound_setPitch(sounds[1][j], pitch[j]);
-		}
+
+	for (int i = 0; i < MAX_SOUNDS; i++) {
+		memset(&sounds[i], 0, sizeof(sounds[i]));
+		sounds[i].sound = sfSound_create();
+		sounds[i].released = true;
 	}
+
 	if (debug) {
-		for (int i = 0; i < 2; i++) {
-			for (int j = 0; j < 128; j++) {
-				if (!sounds[i][j]) {
-					debug = false;
-					printf("Sound[%i][%i] is not set !\n", i, j);
-				}
+		for (int i = 0; i < MAX_SOUNDS; i++) {
+			if (!sounds[i].sound) {
+				debug = false;
+				printf("Sound[%i]] is not set !\n", i);
 			}
 		}
 		if (debug)
