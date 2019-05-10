@@ -46,7 +46,7 @@ typedef struct {
 	Instrument	instrument;
 	bool		go;
 	double		speed;
-} settings_t;
+} Settings;
 
 typedef struct {
 	char		playingNotes[16][128];
@@ -60,12 +60,12 @@ typedef struct {
 	double		midiClockTicks;
 	unsigned int	notesPlayed;
 	int		*begin;
-} exec_state_t;
+} State;
 
 struct data_s {
 	sfRenderWindow	*window;
-	settings_t	*settings;
-	exec_state_t	*execState;
+	Settings	*settings;
+	State		*execState;
 	MidiParser	*parserResult;
 	sfRectangleShape*rect;
 	sfText		*text;
@@ -111,8 +111,8 @@ size_t	strlen_unicode(sfUint32 *str);
 sfUint32*convertStringToUnicode(unsigned char *str, sfUint32 *buffer);
 size_t	calcStringLen(sfUint32 *str);
 char	*convertUnicodeToString(sfUint32 *str, char *buffer);
-void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, double time);
+void	updateSounds(sfSound ***sounds, State *state, unsigned char volume, double time);
 void	loadSounds(char *path, sfSound ***sounds, sfSoundBuffer *soundBuffers[2][128], bool debug, Instrument instrument);
-void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result);
+void	updateEvents(State *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result);
 void	displayNote(unsigned char channel, unsigned char pitch, double startTime, double currentTime, sfRectangleShape *rec, sfRenderWindow *win, bool debug);
-void	displayNotesFromNotesList(Track *track, int begin, exec_state_t *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);
+void	displayNotesFromNotesList(Track *track, int begin, State *state, sfRectangleShape *rec, sfRenderWindow *win, bool debug, int *nbOfNotesDisplayed);

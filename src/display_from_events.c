@@ -79,7 +79,7 @@ void	displayNote(unsigned char channel, unsigned char pitch, double startTime, d
 	}
 }
 
-void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result)
+void	updateEvents(State *state, sfSound ***sounds, bool debug, double time, unsigned char volume, MidiParser *result)
 {
 	for (unsigned int i = 0; i < state->nbOfTracks; i++)
 		state->bufferedTicks[i] += time;
@@ -130,7 +130,7 @@ void	updateEvents(exec_state_t *state, sfSound ***sounds, bool debug, double tim
 		printf("\n");
 }
 
-void	updateSounds(sfSound ***sounds, exec_state_t *state, unsigned char volume, double time)
+void	updateSounds(sfSound ***sounds, State *state, unsigned char volume, double time)
 {
 	for (int i = 0; i < 2; i++)
 		for (int j = 0; j < 128; j++) {

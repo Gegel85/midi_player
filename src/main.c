@@ -91,8 +91,8 @@ bool	displayMidi(char *progPath, MidiParser *result, bool debug, sfRenderWindow 
 	struct	data_s	data;
 	char		buffer[1000];
 	int		nbOfNotesDisplayed;
-	exec_state_t	state;
-static	settings_t	settings = {false, true, 50, PIANO, false, 0};
+	State	state;
+static	Settings	settings = {false, true, 50, PIANO, false, 0};
 	sfThread	*thread;
 
 	sfText_setColor(text, (sfColor){255, 255, 255, 255});
