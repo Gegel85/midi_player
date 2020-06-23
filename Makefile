@@ -27,11 +27,12 @@ SFML =	-lsfml-audio		\
 	-lsfml-system		\
 	-lsfml-window		\
 
-LDFLAGS =				\
-	-lm				\
-	-Llib/concatf			\
-	lib/midi_parser/midiparser.a	\
-	-lconcatf			\
+LDFLAGS =			\
+	-lm			\
+	-Llib/concatf		\
+	-LLib/midi_parser	\
+	-lmidiparser		\
+	-lconcatf		\
 
 CFLAGS= $(INC)			\
 	-W			\
@@ -43,15 +44,15 @@ CC =	gcc
 
 RULE =	all
 
-LIBS =	lib/midi_parser/midiparser.a	\
-	lib/concatf/concatf.a		\
+LIBS =	lib/midi_parser/libmidiparser.a	\
+	lib/concatf/libconcatf.a	\
 
 all:	$(LIBS) $(NAME)
 
-lib/midi_parser/midiparser.a:
+lib/midi_parser/libmidiparser.a:
 	$(MAKE) -C lib/midi_parser $(RULE)
 
-lib/concatf/concatf.a:
+lib/concatf/libconcatf.a:
 	$(MAKE) -C lib/concatf $(RULE)
 
 $(NAME):$(OBJ)
